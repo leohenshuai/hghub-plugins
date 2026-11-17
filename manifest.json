@@ -1,0 +1,20 @@
+{
+  "name": "HGhub 修复版片源",
+  "description": "从 CoderL98/hghub-plugins 修复：4k-av 换新域名并补 Accept-Language；Hanime1 改用镜像 hanimeone.me。",
+  "plugins": [
+    {
+      "id": "4kav",
+      "name": "4k-av",
+      "version": "1.0.2",
+      "url": "plugins/4kav.js",
+      "description": "4kmp 影视源：首页、分类、搜索、详情与直链播放。"
+    },
+    {
+      "id": "hanime",
+      "name": "Hanime1",
+      "version": "1.0.2",
+      "url": "plugins/hanime.js",
+      "description": "Hanime1：分类、搜索、详情与直链播放。"
+    }
+  ]
+}
