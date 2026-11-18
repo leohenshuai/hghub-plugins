@@ -1,7 +1,7 @@
 export const meta = {
   id: 'xingya',
   name: '星芽短剧',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: '星芽短剧 App 接口：分类、搜索、详情与直链播放。登录令牌保存在插件存储中。',
   author: 'community',
@@ -190,8 +190,14 @@ export default function (hg) {
           ctx,
           '分类',
         );
-        const items = mapList(body.data && body.data.list);
-        return { items, next: items.length >= 24 ? String(page + 1) : null };
+        const all = mapList(body.data && body.data.list);
+        // 部分分类（如「星选好剧」）忽略 page_num/page_size，一次返回全部且每页相同：本地按 24 条切片
+        if (all.length > 24) {
+          const start = (page - 1) * 24;
+          const items = all.slice(start, start + 24);
+          return { items, next: start + 24 < all.length ? String(page + 1) : null };
+        }
+        return { items: all, next: all.length >= 24 ? String(page + 1) : null };
       },
     },
 

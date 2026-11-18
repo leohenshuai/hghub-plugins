@@ -1,7 +1,7 @@
 export const meta = {
   id: 'madou',
   name: '麻豆社',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: '麻豆社：分类、搜索、详情与 HLS 播放。',
   author: 'community',
@@ -122,7 +122,9 @@ export default function (hg) {
         if (page > 1) url = url.replace(/\/?$/, '') + '/page/' + page;
         const html = await fetchHtml(url, ctx);
         const items = parseCards(html);
-        return { items, next: items.length ? String(page + 1) : null };
+        // 只有页面里出现 /page/{N+1} 链接才有下一页（小分类不足一页，/page/2 会 404；点赞排行是单页）
+        const more = html.indexOf('/page/' + (page + 1)) >= 0;
+        return { items, next: items.length && more ? String(page + 1) : null };
       },
     },
 

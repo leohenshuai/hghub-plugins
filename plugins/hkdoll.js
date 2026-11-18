@@ -1,7 +1,7 @@
 export const meta = {
   id: 'hkdoll',
   name: '玩偶姐姐',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: '玩偶姐姐：分类、搜索、详情与 XOR 解密播放。',
   author: 'community',
@@ -17,6 +17,8 @@ export const meta = {
 
 const SITE = 'https://hongkongdollvideo.com';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+const CDN_NODE = 't33';   // cdn2020 当前可用节点
 
 export default function (hg) {
   function origin() {
@@ -89,6 +91,11 @@ export default function (hg) {
     return json.stream;
   }
 
+  // 是否还有下一页：看页面里有没有指向 /{page+1}.html 的分页链接（不足一页的分类，站点对 /2.html 会回第 1 页）
+  function hasNext(html, page) {
+    return html.indexOf('/' + (page + 1) + '.html"') >= 0;
+  }
+
   function parseCards(html) {
     const doc = hg.html.parse(html);
     const items = [];
@@ -154,7 +161,7 @@ export default function (hg) {
         if (page > 1) url = url.replace(/\/?$/, '/') + page + '.html';
         const html = await fetchHtml(url, ctx);
         const items = parseCards(html);
-        return { items, next: items.length ? String(page + 1) : null };
+        return { items, next: items.length && hasNext(html, page) ? String(page + 1) : null };
       },
     },
 
@@ -167,7 +174,7 @@ export default function (hg) {
         if (page > 1) url += page + '.html';
         const html = await fetchHtml(url, ctx);
         const items = parseCards(html);
-        return { items, next: items.length ? String(page + 1) : null };
+        return { items, next: items.length && hasNext(html, page) ? String(page + 1) : null };
       },
     },
 
@@ -202,13 +209,14 @@ export default function (hg) {
         if (!embedUrl) fail('UPSTREAM_CHANGED', '未找到播放嵌入地址');
         const playUrl = getPlayUrl(embedUrl);
         if (!playUrl) fail('UPSTREAM_CHANGED', '播放地址解密失败');
+        // 站点仍返回早年的 CDN 节点（t26/t27…），多数已下线 404；同路径在当前节点 t33 可用（2026-11 实测）
+        const urls = [playUrl];
+        const alt = playUrl.replace(/\/\/t\d+\.cdn2020\.com\//, '//' + CDN_NODE + '.cdn2020.com/');
+        if (alt !== playUrl) urls.unshift(alt);   // 当前节点优先，原地址兜底
         return {
-          streams: [{
-            url: playUrl,
-            kind: 'media',
-            format: guessFormat(playUrl),
-            headers: headers(),
-          }],
+          streams: urls.map(function (u, i) {
+            return { url: u, kind: 'media', format: guessFormat(u), headers: headers(), label: i === 0 && urls.length > 1 ? '线路 1' : '线路 ' + (i + 1) };
+          }),
         };
       },
     },

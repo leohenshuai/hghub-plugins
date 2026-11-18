@@ -1,7 +1,7 @@
 export const meta = {
   id: 'hanime',
   name: 'Hanime1',
-  version: '1.0.3',
+  version: '1.0.4',
   protocol: 1,
   description: 'Hanime1：分类、搜索、详情与直链播放。',
   author: 'community',
@@ -149,7 +149,7 @@ export default function (hg) {
         if (page > 1) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'page=' + page;
         const html = await fetchHtml(url, ctx);
         const items = parseCards(html);
-        return { items, next: items.length ? String(page + 1) : null };
+        return { items, next: items.length >= 20 ? String(page + 1) : null };   // 不足一页即最后一页
       },
     },
 
@@ -192,16 +192,29 @@ export default function (hg) {
         const episodeId = params && params.episodeId;
         if (!episodeId) fail('INVALID_ARGUMENT', '缺少分集 ID');
         const html = await fetchHtml(absUrl(episodeId), ctx);
-        const m = html.match(/contentUrl"\s*:\s*"(.*?)"/);
-        if (!m) fail('UPSTREAM_CHANGED', '未解析到播放地址');
-        return {
-          streams: [{
-            url: m[1],
-            kind: 'media',
-            format: guessFormat(m[1]),
-            headers: headers(),
-          }],
-        };
+        // 2026-11 起播放地址在 <video><source src size="1080"> 里，多清晰度；旧版 JSON-LD contentUrl 作回退
+        const doc = hg.html.parse(html);
+        const streams = [];
+        const seen = {};
+        const nodes = doc.select('video source[src]');
+        for (let i = 0; i < nodes.length; i++) {
+          const url = (nodes[i].attr('src') || '').replace(/&amp;/g, '&');
+          if (!url || seen[url]) continue;
+          seen[url] = 1;
+          const h = parseInt(nodes[i].attr('size') || '', 10);
+          const st = { url, kind: 'media', format: guessFormat(url), headers: headers() };
+          if (Number.isFinite(h) && h > 0) { st.height = h; st.label = h + 'P'; }
+          streams.push(st);
+        }
+        if (!streams.length) {
+          const m = html.match(/contentUrl"\s*:\s*"(.*?)"/);
+          if (m) streams.push({ url: m[1].replace(/\\\//g, '/'), kind: 'media', format: guessFormat(m[1]), headers: headers() });
+        }
+        if (!streams.length) fail('UPSTREAM_CHANGED', '未解析到播放地址');
+        streams.sort(function (a, b) { return (b.height || 0) - (a.height || 0); });   // 高清在前
+        const max = params && params.maxHeight;
+        const fit = max ? streams.filter(function (x) { return !x.height || x.height <= max; }) : streams;
+        return { streams: fit.length ? fit : streams };
       },
     },
   };
