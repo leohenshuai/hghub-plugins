@@ -1,7 +1,7 @@
 export const meta = {
   id: 'hanime',
   name: 'Hanime1',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: 'Hanime1：分类、搜索、详情与直链播放。',
   author: 'community',
@@ -49,12 +49,14 @@ export default function (hg) {
     return res.data;
   }
 
+  // 链接里的中文/空格必须编码，否则站点返回 400（如 genre=裏番）
+  function encodeUrl(u) { try { return encodeURI(decodeURI(u)); } catch (e) { return encodeURI(u); } }
   function absUrl(href) {
     if (!href) return '';
-    if (/^https?:\/\//i.test(href)) return href;
+    if (/^https?:\/\//i.test(href)) return encodeUrl(href);
     if (href.startsWith('//')) return 'https:' + href;
     const o = origin();
-    return href.startsWith('/') ? o + href : o + '/' + href;
+    return encodeUrl(href.startsWith('/') ? o + href : o + '/' + href);
   }
 
   function pageOf(cursor) {
@@ -65,6 +67,27 @@ export default function (hg) {
   function parseCards(html) {
     const doc = hg.html.parse(html);
     const items = [];
+    // 新版列表/搜索页卡片：.video-item-container（2026-11 起）
+    const cards = doc.select('.video-item-container');
+    const seen = {};
+    for (let i = 0; i < cards.length; i++) {
+      const el = cards[i];
+      const a = el.first('a.video-link') || el.first('a');
+      const href = a && a.attr('href');
+      if (!href || href.indexOf('watch?v=') < 0 || seen[href]) continue;   // 跳过赞助商外链
+      seen[href] = 1;
+      const t = el.first('.title');
+      const title = (el.attr('title') || (t ? t.text() : '')).trim();
+      if (!title) continue;
+      const img = el.first('img.main-thumb') || el.first('img');
+      const item = { id: absUrl(href), title, type: 'anime' };
+      const cover = img && img.attr('src');
+      if (cover) item.cover = absUrl(cover);
+      const dur = el.first('.duration');
+      if (dur && dur.text()) item.badge = dur.text().trim().slice(0, 8);
+      items.push(item);
+    }
+    if (items.length) return items;
     let nodes = doc.select('.home-rows-videos-wrapper > a');
     if (!nodes.length) nodes = doc.select('.content-padding-new > .row > .search-doujin-videos.col-xs-6, .col-xs-6');
     for (let i = 0; i < nodes.length; i++) {
@@ -94,6 +117,7 @@ export default function (hg) {
       const href = links[i].attr('href');
       if (!name || !href) continue;
       if (name.indexOf('新番預告') >= 0 || name.indexOf('H漫畫') >= 0) continue;
+      if (!/\/search\?/.test(href) || (/^https?:/i.test(href) && href.indexOf(origin().replace(/^https?:\/\//, '')) < 0)) continue;   // 外链广告
       items.push({ id: absUrl(href), label: name });
     }
     return items.length ? items : [{ id: origin() + '/', label: '首页' }];

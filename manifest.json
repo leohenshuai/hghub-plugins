@@ -1,6 +1,6 @@
 {
   "name": "HGhub 修复版片源",
-  "description": "从 CoderL98/hghub-plugins 修复：4k-av 换新域名并补 Accept-Language；Hanime1 改用镜像 hanimeone.me。",
+  "description": "从 CoderL98/hghub-plugins 修复。相对路径以本列表 URL 为基准。",
   "plugins": [
     {
       "id": "4kav",
@@ -10,11 +10,39 @@
       "description": "4kmp 影视源：首页、分类、搜索、详情与直链播放。"
     },
     {
+      "id": "avtoday",
+      "name": "avtoday",
+      "version": "1.0.2",
+      "url": "plugins/avtoday.js",
+      "description": "avtoday：分类、搜索、详情与 HLS 播放。"
+    },
+    {
       "id": "hanime",
       "name": "Hanime1",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "url": "plugins/hanime.js",
       "description": "Hanime1：分类、搜索、详情与直链播放。"
+    },
+    {
+      "id": "hkdoll",
+      "name": "玩偶姐姐",
+      "version": "1.0.2",
+      "url": "plugins/hkdoll.js",
+      "description": "玩偶姐姐：分类、搜索、详情与 XOR 解密播放。"
+    },
+    {
+      "id": "madou",
+      "name": "麻豆社",
+      "version": "1.0.2",
+      "url": "plugins/madou.js",
+      "description": "麻豆社：分类、搜索、详情与 HLS 播放。"
+    },
+    {
+      "id": "xingya",
+      "name": "星芽短剧",
+      "version": "1.0.2",
+      "url": "plugins/xingya.js",
+      "description": "星芽短剧 App 接口：分类、搜索、详情与直链播放。登录令牌保存在插件存储中。"
     }
   ]
 }
