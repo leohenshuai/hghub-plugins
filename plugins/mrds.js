@@ -1,7 +1,7 @@
 export const meta = {
   id: 'mrds',
   name: '每日大赛',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
   description: '每日大赛（mrds.com，吃瓜站，含多条镜像线路可切换）：15 个栏目、搜索、详情与 HLS 播放。',
   author: 'community',
@@ -25,6 +25,18 @@ const CATEGORIES = [
   ['jdsj', 'AV看片'], ['mxwh', '明星大赛'], ['smdh', '动漫之家'], ['dypd', '影视国漫'],
   ['czds', '寸止挑战'], ['omjp', '欧美精品'], ['tgds', '投稿原创'],
 ];
+
+
+// 站点图片是加密的：路径含 /upload_01/ 等目录的，内容是 AES-128-CBC（与 911爆料网、黄果短剧同一套密钥，实测解出 JPEG）
+const IMG_KEY_B64 = 'ZjVkOTY1ZGY3NTMzNjI3MA==';
+const IMG_IV_B64 = 'OTdiNjAzOTRhYmMyZmJlMQ==';
+function imgRef(url) {
+  if (!url) return undefined;
+  let path = '';
+  try { path = new URL(url).pathname; } catch (_) { return url; }
+  if (!/\/(upload_01|upload|uploads|xiao|hc237|upload-images)\//.test(path)) return url;
+  return { url: url, transform: { type: 'aes-cbc', key: IMG_KEY_B64, iv: IMG_IV_B64, padding: 'pkcs7' } };
+}
 
 export default function (hg) {
   function origin() {
@@ -74,7 +86,7 @@ export default function (hg) {
       seen[a[1]] = 1;
       const it = { id: a[1], title, type: 'movie' };
       const c = p.match(/loadBannerDirect\(\s*['"]([^'"]+)['"]/);
-      if (c) it.cover = abs(c[1]);
+      if (c) it.cover = imgRef(abs(c[1]));
       const sub = p.match(/<span>([^<]*)<\/span>\s*<\/div>/);
       if (sub && clean(sub[1])) it.subtitle = clean(sub[1]);
       items.push(it);
@@ -155,9 +167,9 @@ export default function (hg) {
         for (let i = 0; i < n; i++) eps.push({ id: id + ':' + i, index: i + 1, episodeNumber: i + 1, label: n > 1 ? '视频 ' + (i + 1) : '播放' });
         const detail = { id, title, type: 'movie', playlists: [{ id: 'main', label: '默认', episodes: eps }] };
         const imgs = html.match(/data-xkrkllgl="([^"]+)"/);
-        if (imgs) detail.cover = abs(imgs[1]);
+        if (imgs) detail.cover = imgRef(abs(imgs[1]));
         const c = html.match(/loadBannerDirect\(\s*['"]([^'"]+)['"]/);
-        if (!detail.cover && c) detail.cover = abs(c[1]);
+        if (!detail.cover && c) detail.cover = imgRef(abs(c[1]));
         return detail;
       },
 

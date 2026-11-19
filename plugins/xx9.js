@@ -1,7 +1,7 @@
 export const meta = {
   id: 'xx9',
   name: '主播视频',
-  version: '1.0.1',
+  version: '1.0.2',
   protocol: 1,
   description: '主播视频（xx9.com）：点播源。分类、搜索、专题、详情与 HLS 播放。接口为 AES-ECB 加密网关（密钥按时间戳尾数轮换），自动获取 jwtToken 与游客 accessToken；封面为单字节 XOR 加密。',
   author: 'community',
@@ -443,11 +443,13 @@ export default function (hg) {
         const a = list[idx];
         if (!a) fail('UNAVAILABLE', '该视频没有可播放地址');
         const servers = cfg.lines.map(function (l, i) { return { id: String(i), label: l.name }; });
-        let sid = params.serverId != null ? parseInt(params.serverId, 10) : -1;
+        let sid = params.serverId != null && params.serverId !== '' ? parseInt(params.serverId, 10) : -1;
         const path = a.addr.charAt(0) === '/' ? a.addr : '/' + a.addr;
         // 线路好坏会变（2026-11-19 实测：国线1 清单能取到，但密钥/分片所在的 tigerstx 子域连不上 → 黑屏）。
         // 未指定线路时，按顺序探测每条线路「清单 → 首个密钥」，第一个全通的作默认；其余线路依次作为备用流返回。
+        // App 会带上它记住的 serverId（上次用过的线路），而线路好坏会变：即便指定了线路，也先验证它能播，不行就自动换到能播的。
         if (!Number.isFinite(sid) || sid < 0 || sid >= cfg.lines.length) sid = await pickLine(cfg, path, ctx);
+        else if (!(await lineWorks(cfg.lines[sid].line + path, ctx))) sid = await pickLine(cfg, path, ctx);
         const order = [sid].concat(cfg.lines.map(function (_, i) { return i; }).filter(function (i) { return i !== sid; }));
         return {
           streams: order.map(function (i) {

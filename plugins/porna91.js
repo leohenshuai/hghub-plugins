@@ -1,7 +1,7 @@
 export const meta = {
   id: 'porna91',
   name: '91Porna',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
   description: '91Porna（91porna.com）：12 个榜单分类、搜索、详情与 HLS 播放（播放接口 + CDN 鉴权头）。',
   author: 'community',
@@ -25,6 +25,18 @@ const CATEGORIES = [
   ['now_month_collect', '本月收藏'], ['hd', '高清'], ['month_hot', '上月最热'],
   ['now_month_comment', '本月讨论'], ['max_collect', '收藏最多'],
 ];
+
+
+// 站点图片是加密的：路径含 /upload_01/ 等目录的，内容是 AES-128-CBC（与 911爆料网、黄果短剧同一套密钥，实测解出 JPEG）
+const IMG_KEY_B64 = 'ZjVkOTY1ZGY3NTMzNjI3MA==';
+const IMG_IV_B64 = 'OTdiNjAzOTRhYmMyZmJlMQ==';
+function imgRef(url) {
+  if (!url) return undefined;
+  let path = '';
+  try { path = new URL(url).pathname; } catch (_) { return url; }
+  if (!/\/(upload_01|upload|uploads|xiao|hc237|upload-images)\//.test(path)) return url;
+  return { url: url, transform: { type: 'aes-cbc', key: IMG_KEY_B64, iv: IMG_IV_B64, padding: 'pkcs7' } };
+}
 
 export default function (hg) {
   function fail(code, message, extra) { throw new hg.PluginError(code, message, extra); }
@@ -73,7 +85,7 @@ export default function (hg) {
       seen[id] = 1;
       const it = { id, title, type: 'movie' };
       const cover = img && (img.attr('data-src') || img.attr('src'));
-      if (cover && !/poster_loading/.test(cover)) it.cover = abs(cover);
+      if (cover && !/poster_loading/.test(cover)) it.cover = imgRef(abs(cover));
       const m = clean(c.text()).match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
       if (m) it.badge = m[1];
       items.push(it);
@@ -146,7 +158,7 @@ export default function (hg) {
           playlists: [{ id: 'main', label: '默认', episodes: [{ id, index: 1, episodeNumber: 1, label: '播放' }] }],
         };
         const oi = doc.first('meta[property="og:image"]');
-        if (oi && oi.attr('content')) detail.cover = abs(oi.attr('content'));
+        if (oi && oi.attr('content')) detail.cover = imgRef(abs(oi.attr('content')));
         return detail;
       },
 
