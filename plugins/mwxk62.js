@@ -1,7 +1,7 @@
 export const meta = {
   id: 'mwxk62',
   name: 'KKAV',
-  version: '1.0.1',
+  version: '1.0.3',
   protocol: 1,
   description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名每天会变，插件自动解析）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
   author: 'community',
@@ -329,10 +329,48 @@ export default function (hg) {
           type: 'movie',
           playlists: [{ id: 'main', label: '默认', episodes: [{ id: '1', index: 1, episodeNumber: 1, label: '播放' }] }],
         };
+        // 播放页本身没有封面/时长/日期（这些只存在于列表页）：用标题在站内搜索，按视频编号找回同一条的信息。
+        // 站点视频没有简介，标签/清晰度/时长/发布日期是能拿到的全部元数据。
+        try {
+          if (p.title) {
+            await resolveSite(ctx);
+            // 站点搜索只匹配标题里的「一个连续片段」，带空格/标点的长词搜不到：
+            // 先取第一个空格或标点之前的部分，再从长到短试（20→12→8→6 字），找到同编号那条为止
+            // 站点搜索是「子串匹配」：带编号开头的标题（FC2-4956890 …）用编号搜不中，短词会返回一堆无关结果。
+            // 做法：把标题按空格/标点/英文编号切成片段，取最长的几段，各自从长到短（20→12→8→6 字）试，直到搜到同编号那条。
+            const segs = p.title.split(/[\s,，。！!？?、:：;；\-—|｜【】\[\]()（）]+/).filter(function (x) { return x && !/^[A-Za-z0-9]+$/.test(x); });
+            segs.sort(function (x, y) { return y.length - x.length; });
+            const tries = [];
+            segs.slice(0, 3).forEach(function (seg) {
+              [20, 12, 8, 6].forEach(function (n) { const q = seg.slice(0, n); if (q.length >= 4 && tries.indexOf(q) < 0) tries.push(q); });
+            });
+            if (!tries.length) tries.push(p.title.slice(0, 8));
+            let me = null;
+            for (let i = 0; i < tries.length && !me; i++) {
+              const sh = await fetchText(SITE + '/list.jsp?tagid=&tj=&s=' + encodeURIComponent(tries[i]) + '&page=1', ctx, { allowFail: true, timeoutMs: 12000 });
+              if (sh) me = parseCards(sh, cfg).filter(function (x) { return x.id === detail.id; })[0] || null;
+            }
+            if (me) {
+              if (me.cover) { detail.cover = me.cover; detail.backdrop = me.cover; }
+              if (me.durationSec) detail.durationSec = me.durationSec;
+              if (me.year) detail.year = me.year;
+              if (me.publishedAt) detail.publishedAt = me.publishedAt;
+              if (me.badge) detail.tags = [me.badge];
+            }
+          }
+        } catch (_) {}
         const related = parseCards(p.html, cfg).filter(function (x) { return x.id !== detail.id; });
         if (related.length) {
           detail.related = related;
           // 详情页本身没有大图；同栏目里同一作品的封面不在本页，留空即可
+        }
+        if (!detail.description) {
+          const bits = [];
+          if (detail.durationSec) { const t = detail.durationSec; bits.push('时长 ' + (t >= 3600 ? Math.floor(t / 3600) + ':' : '') + String(Math.floor((t % 3600) / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0')); }
+          if (detail.tags && detail.tags.length) bits.push('清晰度 ' + detail.tags[0]);
+          if (detail.year) bits.push('发布于 ' + detail.year + ' 年');
+          bits.push('该站点未提供视频简介');
+          detail.description = bits.join(' · ');
         }
         return detail;
       },
@@ -362,6 +400,11 @@ export default function (hg) {
         if (p.h264hi) {
           streams.unshift({ url: line.base + p.h264hi + 'index.m3u8', kind: 'media', format: 'hls', codec: 'h264', label: '高码率', serverId: line.id, headers: headers() });
         }
+        // 备用：另一条线路的同一视频（实测「极速」线路偶发 25 秒无响应，换另一条能通）
+        lines.forEach(function (l) {
+          if (l.id === line.id) return;
+          streams.push({ url: l.base + p.h264 + 'index.m3u8', kind: 'media', format: 'hls', codec: 'h264', label: '720P · ' + l.label + '（备用）', height: 720, serverId: l.id, headers: headers() });
+        });
         return { streams: streams, servers: lines.map(function (l) { return { id: l.id, label: l.label }; }) };
       },
 

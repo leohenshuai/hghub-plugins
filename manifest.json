@@ -110,7 +110,7 @@
     {
       "id": "mwxk62",
       "name": "KKAV",
-      "version": "1.0.1",
+      "version": "1.0.3",
       "description": "KKAV（入口 62mwxk.com 是跳板页，真实域名每天会变，插件自动解析）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。",
       "url": "plugins/mwxk62.js"
     },
