@@ -1,6 +1,6 @@
 {
   "name": "HGhub 修复版片源",
-  "description": "HGhub 片源合集：从 CoderL98/hghub-plugins 修复 + 新增，2026-11 体检通过（19 个源）。相对路径以本列表 URL 为基准。",
+  "description": "HGhub 片源合集：从 CoderL98/hghub-plugins 修复 + 新增，2026-11 体检通过（18 个源）。相对路径以本列表 URL 为基准。",
   "plugins": [
     {
       "id": "4kav",
@@ -99,13 +99,6 @@
       "version": "1.0.0",
       "description": "Pornlulu（撸撸）：首页、分类、排行、搜索、详情与 HLS 播放。站点前置 CDNLah「工作量验证」（SHA-256 PoW），插件内自动求解并缓存通行 Cookie。",
       "url": "plugins/pornlulu.js"
-    },
-    {
-      "id": "saohuo",
-      "name": "烧火电影",
-      "version": "1.0.1",
-      "url": "plugins/saohuo.js",
-      "description": "烧火电影：分类、搜索、多线路详情与 iframe 解析播放。"
     },
     {
       "id": "wwgz",
