@@ -1,6 +1,6 @@
 {
   "name": "HGhub 修复版片源",
-  "description": "从 CoderL98/hghub-plugins 修复，2026-11 全量体检后更新（14 个可用源）。相对路径以本列表 URL 为基准。",
+  "description": "HGhub 片源合集：从 CoderL98/hghub-plugins 修复 + 新增，2026-11 体检通过（19 个源）。相对路径以本列表 URL 为基准。",
   "plugins": [
     {
       "id": "4kav",
@@ -8,6 +8,13 @@
       "version": "1.0.3",
       "url": "plugins/4kav.js",
       "description": "4kmp 影视源：首页、分类、搜索、详情与直链播放。"
+    },
+    {
+      "id": "91porn",
+      "name": "91porn",
+      "version": "1.0.0",
+      "description": "91porn（含镜像 sp2026.com，可在线路中切换）：分类、搜索、详情与 MP4 播放。",
+      "url": "plugins/91porn.js"
     },
     {
       "id": "apple",
@@ -22,6 +29,13 @@
       "version": "1.0.3",
       "url": "plugins/avtoday.js",
       "description": "avtoday：分类、搜索、详情与 HLS 播放。"
+    },
+    {
+      "id": "bl911",
+      "name": "911爆料网",
+      "version": "1.0.0",
+      "description": "911爆料网（吃瓜爆料、网红黑料）：图文文章列表与详情，以及帖子内嵌视频（DPlayer HLS）的分类、搜索、播放。封面按站点前端的 AES-CBC 图片协议解密。站点常换 CloudFront 地址，可在线路中切换或刷新。",
+      "url": "plugins/bl911.js"
     },
     {
       "id": "hanime",
@@ -66,11 +80,25 @@
       "description": "麻豆社：分类、搜索、详情与 HLS 播放。"
     },
     {
+      "id": "mwxk62",
+      "name": "KKAV",
+      "version": "1.0.0",
+      "description": "KKAV（62mwxk.com，海外永久域名 kkav.com）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。",
+      "url": "plugins/mwxk62.js"
+    },
+    {
       "id": "pornhub",
       "name": "Pornhub",
       "version": "1.0.2",
       "url": "plugins/pornhub.js",
       "description": "Pornhub：分类、搜索、详情与 HLS 播放。"
+    },
+    {
+      "id": "pornlulu",
+      "name": "撸撸视频 Pornlulu",
+      "version": "1.0.0",
+      "description": "Pornlulu（撸撸）：首页、分类、排行、搜索、详情与 HLS 播放。站点前置 CDNLah「工作量验证」（SHA-256 PoW），插件内自动求解并缓存通行 Cookie。",
+      "url": "plugins/pornlulu.js"
     },
     {
       "id": "saohuo",
@@ -99,6 +127,13 @@
       "version": "1.0.3",
       "url": "plugins/xingya.js",
       "description": "星芽短剧 App 接口：分类、搜索、详情与直链播放。登录令牌保存在插件存储中。"
+    },
+    {
+      "id": "xx9",
+      "name": "主播视频",
+      "version": "1.0.0",
+      "description": "主播视频（xx9.com）：点播源。分类、搜索、专题、详情与 HLS 播放。接口为 AES-ECB 加密网关（密钥按时间戳尾数轮换），自动获取 jwtToken 与游客 accessToken；封面为单字节 XOR 加密。",
+      "url": "plugins/xx9.js"
     }
   ]
 }
