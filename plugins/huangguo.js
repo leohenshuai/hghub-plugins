@@ -1,7 +1,7 @@
 export const meta = {
   id: 'huangguo',
   name: '黄果短剧',
-  version: '1.0.1',
+  version: '1.0.2',
   protocol: 1,
   description: '黄果短剧站点源：首页、分类、搜索、详情、HLS 播放与图文。封面走站点公开的 AES-CBC 图片协议。',
   author: 'community',
@@ -27,6 +27,7 @@ const IMG_HOSTS = {
   'pic.eanfog.cn': true,
   'pic.zdmhyg.cn': true,
   'pic.tuafjz.cn': true,
+  'pic.qnlycc.cn': true,
 };
 const STATIC_CATES = [
   { id: '24', label: 'AI短剧', route: 'ai-duanju' },
@@ -142,7 +143,11 @@ export default function (hg) {
     const href = String(url);
     let host = '';
     try { host = new URL(href).hostname; } catch (_) { return href; }
-    if (!IMG_HOSTS[host]) return href;
+    // 封面域名会换（pic.drleao.cn → … → pic.qnlycc.cn，2026-11），不再只认域名：
+    // 旧域名名单 或 路径含 /upload_01/ 等站点加密图目录 都按 AES-CBC 解密
+    let path = '';
+    try { path = new URL(href).pathname; } catch (_) {}
+    if (!IMG_HOSTS[host] && !/\/(upload_01|upload|uploads|xiao|hc237|upload-images)\//.test(path)) return href;
     return {
       url: href,
       transform: { type: 'aes-cbc', key: COVER_KEY_B64, iv: COVER_IV_B64, padding: 'none' },

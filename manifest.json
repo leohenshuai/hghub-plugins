@@ -61,7 +61,7 @@
     {
       "id": "huangguo",
       "name": "黄果短剧",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "url": "plugins/huangguo.js",
       "description": "黄果短剧站点源：首页、分类、搜索、详情、HLS 播放与图文。封面走站点公开的 AES-CBC 图片协议。"
     },
@@ -124,7 +124,7 @@
     {
       "id": "xx9",
       "name": "主播视频",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "主播视频（xx9.com）：点播源。分类、搜索、专题、详情与 HLS 播放。接口为 AES-ECB 加密网关（密钥按时间戳尾数轮换），自动获取 jwtToken 与游客 accessToken；封面为单字节 XOR 加密。",
       "url": "plugins/xx9.js"
     }

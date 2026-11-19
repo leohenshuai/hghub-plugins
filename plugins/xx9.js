@@ -1,7 +1,7 @@
 export const meta = {
   id: 'xx9',
   name: '主播视频',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
   description: '主播视频（xx9.com）：点播源。分类、搜索、专题、详情与 HLS 播放。接口为 AES-ECB 加密网关（密钥按时间戳尾数轮换），自动获取 jwtToken 与游客 accessToken；封面为单字节 XOR 加密。',
   author: 'community',
@@ -299,6 +299,49 @@ export default function (hg) {
     return vod;
   }
 
+  // 探测线路：并行请求各线路「清单 → 密钥 → 首个分片」，全部通过才算可用；取最先通过的。结果缓存 10 分钟。
+  // （2026-11-19 实测：同一时刻各线路好坏不同且会变，国线1/国线4 曾出现清单可取、分片 CDN 连不上 → 黑屏）
+  let lineCache = null;
+  async function grab(url, type, ctx, range) {
+    const h = mediaHeaders();
+    if (range) h.Range = 'bytes=0-1023';
+    try {
+      const r = await hg.http.fetch({ url, headers: h, responseType: type, timeoutMs: 5000, signal: ctx && ctx.signal });
+      return r.ok || r.status === 206 ? r.data : null;
+    } catch (_) { return null; }
+  }
+  function resolveRef(ref, base) {
+    if (/^https?:/i.test(ref)) return ref;
+    try { return new URL(ref, base).href; } catch (_) { return ''; }
+  }
+  async function lineWorks(url, ctx) {
+    const body = await grab(url, 'text', ctx);
+    if (!body || body.indexOf('#EXTM3U') < 0) return false;
+    const km = body.match(/#EXT-X-KEY:[^\n]*URI="([^"]+)"/);
+    const seg = body.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l && l.charAt(0) !== '#'; })[0];
+    const jobs = [];
+    if (km) jobs.push(grab(resolveRef(km[1], url), 'bytes', ctx).then(function (d) { return !!d && d.length === 16; }));
+    if (seg) jobs.push(grab(resolveRef(seg, url), 'bytes', ctx, true).then(function (d) { return !!d && d.length > 0; }));
+    const rs = await Promise.all(jobs);
+    return rs.length > 0 && rs.every(Boolean);
+  }
+  async function pickLine(cfg, path, ctx) {
+    if (lineCache && lineCache.at > Date.now() - 10 * 60 * 1000 && lineCache.sid < cfg.lines.length) return lineCache.sid;
+    const n = cfg.lines.length;
+    const winner = await new Promise(function (resolve) {
+      let left = n;
+      if (!n) resolve(0);
+      cfg.lines.forEach(function (l, i) {
+        lineWorks(l.line + path, ctx).then(function (ok) {
+          if (ok) resolve(i);
+          if (--left === 0) resolve(-1);
+        }, function () { if (--left === 0) resolve(-1); });
+      });
+    });
+    if (winner >= 0) { lineCache = { sid: winner, at: Date.now() }; return winner; }
+    return 0;
+  }
+
   function addrList(vod) {
     const out = [];
     const full = Array.isArray(vod.vodFullPlayUrl) ? vod.vodFullPlayUrl : [];
@@ -400,18 +443,23 @@ export default function (hg) {
         const a = list[idx];
         if (!a) fail('UNAVAILABLE', '该视频没有可播放地址');
         const servers = cfg.lines.map(function (l, i) { return { id: String(i), label: l.name }; });
-        let sid = params.serverId != null ? parseInt(params.serverId, 10) : 0;
-        if (!Number.isFinite(sid) || sid < 0 || sid >= cfg.lines.length) sid = 0;
+        let sid = params.serverId != null ? parseInt(params.serverId, 10) : -1;
         const path = a.addr.charAt(0) === '/' ? a.addr : '/' + a.addr;
+        // 线路好坏会变（2026-11-19 实测：国线1 清单能取到，但密钥/分片所在的 tigerstx 子域连不上 → 黑屏）。
+        // 未指定线路时，按顺序探测每条线路「清单 → 首个密钥」，第一个全通的作默认；其余线路依次作为备用流返回。
+        if (!Number.isFinite(sid) || sid < 0 || sid >= cfg.lines.length) sid = await pickLine(cfg, path, ctx);
+        const order = [sid].concat(cfg.lines.map(function (_, i) { return i; }).filter(function (i) { return i !== sid; }));
         return {
-          streams: [{
-            url: cfg.lines[sid].line + path,
-            kind: 'media',
-            format: 'hls',
-            label: a.label,
-            serverId: String(sid),
-            headers: mediaHeaders(),
-          }],
+          streams: order.map(function (i) {
+            return {
+              url: cfg.lines[i].line + path,
+              kind: 'media',
+              format: 'hls',
+              label: a.label + ' · ' + cfg.lines[i].name,
+              serverId: String(i),
+              headers: mediaHeaders(),
+            };
+          }),
           servers: servers,
           durationSec: a.duration,
           expiresAt: Date.now() + 2 * 3600 * 1000,
