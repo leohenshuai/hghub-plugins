@@ -1,13 +1,13 @@
 export const meta = {
   id: 'mwxk62',
   name: 'KKAV',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
-  description: 'KKAV（62mwxk.com，海外永久域名 kkav.com）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
+  description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名每天会变，插件自动解析）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
   author: 'community',
   kind: 'source',
   mature: true,
-  linkDomains: ['62mwxk.com', 'www.62mwxk.com', 'kkav.com', 'www.kkav.com'],
+  linkDomains: ['62mwxk.com', 'www.62mwxk.com', 'kkav.com', 'www.kkav.com', '78vsdc.com', 'www.78vsdc.com'],
   defaultHeaders: {
     Referer: 'https://62mwxk.com/',
     'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
@@ -15,7 +15,8 @@ export const meta = {
   timeouts: { read: 20, playback: 25 },
 };
 
-const SITE = 'https://62mwxk.com';
+const ENTRY = 'https://62mwxk.com';          // 入口（跳板页，不再是片库本身）
+const FALLBACK_SITE = 'https://www.78vsdc.com';   // 解析失败时的兜底（2026-11-19 实测）
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 // /js/config.js（凯撒移位 3 加密）里解出的默认值；运行时会重新解析 config.js，失败才用这里
 const FALLBACK_CFG = {
@@ -41,6 +42,54 @@ const FALLBACK_CATS = [
 
 export default function (hg) {
   let cfgMem = null;
+  let SITE = FALLBACK_SITE;       // 当前真实站点，由 resolveSite() 解析
+  let siteAt = 0;
+
+  // 入口域名的任何页面都是同一段跳转脚本：eval(decodeURIComponent('url2.push("域名")')) 列出候选域名，
+  // 再按「当天序号 % 数量」选一个、拼上 www. 跳转。这里照同样规则算出当前域名，并校验它真的是片库（有 video-listing）。
+  async function resolveSite(ctx) {
+    if (siteAt && Date.now() - siteAt < 30 * 60 * 1000) return SITE;
+    const cached = await hg.storage.get('site');
+    if (cached && cached.url && cached.at && Date.now() - cached.at < 30 * 60 * 1000) { SITE = cached.url; siteAt = cached.at; return SITE; }
+    const cands = [];
+    try {
+      const res = await hg.http.fetch({ url: ENTRY + '/home.htm', headers: { 'User-Agent': UA }, responseType: 'text', timeoutMs: 12000, signal: ctx && ctx.signal });
+      const html = typeof res.data === 'string' ? res.data : '';
+      if (html.indexOf('video-listing') >= 0) cands.push(ENTRY);        // 入口自己就是片库
+      const m = html.match(/eval\(decodeURIComponent\('([^']+)'\)\)/);
+      if (m) {
+        const decoded = safeDecode(m[1]);
+        const doms = [];
+        const re = /url2\.push\("([^"]+)"\)/g;
+        let x;
+        while ((x = re.exec(decoded))) doms.push(x[1]);
+        const useDay = parseInt((html.match(/var UseDay=(\d+)/) || [])[1] || '1', 10) || 1;
+        const offset = parseInt((html.match(/var OffsetHour=(-?\d+)/) || [])[1] || '0', 10) || 0;
+        if (doms.length) {
+          const day = Math.floor((Math.floor(Date.now() / 1000) * 1000 + 8 * 3600000 - offset * 3600000) / 86400000 / useDay);
+          const pick = doms[day % doms.length].split(',');
+          pick.forEach(function (d) { cands.push('https://www.' + d.trim()); });
+          doms.forEach(function (g) { g.split(',').forEach(function (d) { cands.push('https://www.' + d.trim()); }); });
+        }
+      }
+    } catch (_) {}
+    cands.push(FALLBACK_SITE);
+    const tried = {};
+    for (let i = 0; i < cands.length; i++) {
+      const base = cands[i];
+      if (tried[base]) continue;
+      tried[base] = 1;
+      try {
+        const r = await hg.http.fetch({ url: base + '/home.htm', headers: { 'User-Agent': UA }, responseType: 'text', timeoutMs: 10000, signal: ctx && ctx.signal });
+        if (r.ok && typeof r.data === 'string' && r.data.indexOf('video-listing') >= 0) {
+          SITE = base; siteAt = Date.now();
+          try { await hg.storage.set('site', { url: base, at: siteAt }, { ttlSec: 3600 }); } catch (_) {}
+          return SITE;
+        }
+      } catch (_) {}
+    }
+    fail('UNAVAILABLE', '无法解析 KKAV 当前可用域名（入口 ' + ENTRY + ' 的跳转目标都打不开）');
+  }
 
   function fail(code, message, extra) {
     throw new hg.PluginError(code, message, extra);
@@ -88,6 +137,7 @@ export default function (hg) {
     if (cached) { cfgMem = cached; return cfgMem; }
     const cfg = Object.assign({}, FALLBACK_CFG);
     try {
+      await resolveSite(ctx);
       const js = await fetchText(SITE + '/js/config.js', ctx, { allowFail: true, timeoutMs: 10000 });
       const m = js && js.match(/caesarDecrypt\('((?:[^'\\]|\\.)*)'\s*,\s*(\d+)\)/);
       if (m) {
@@ -162,6 +212,7 @@ export default function (hg) {
     if (cached) return cached;
     let cats = [];
     try {
+      await resolveSite(ctx);
       const js = await fetchText(SITE + '/js/menu.js', ctx, { allowFail: true, timeoutMs: 10000 });
       if (js) {
         const dls = js.split('<dl>');
@@ -205,6 +256,7 @@ export default function (hg) {
     home: {
       async getSections(params, ctx) {
         const cfg = await config(ctx);
+        await resolveSite(ctx);
         const html = await fetchText(SITE + '/home.htm', ctx);
         // 封面数组可能不在分区内，先用整页建立「视频号 → 封面路径」映射
         const covers = {};
@@ -243,6 +295,7 @@ export default function (hg) {
         if (!cid) fail('INVALID_ARGUMENT', '缺少分类');
         const cfg = await config(ctx);
         const page = pageOf(params && params.cursor);
+        await resolveSite(ctx);
         const html = await fetchText(SITE + '/htms/list' + cid + '/' + page + '.htm', ctx);
         const items = parseCards(html, cfg);
         return { items: items, next: items.length && hasNext(html) ? String(page + 1) : null };
@@ -255,6 +308,7 @@ export default function (hg) {
         if (!q) return { items: [], next: null };
         const cfg = await config(ctx);
         const page = pageOf(params && params.cursor);
+        await resolveSite(ctx);
         const url = SITE + '/list.jsp?tagid=&tj=&s=' + encodeURIComponent(q) + '&page=' + page;
         const html = await fetchText(url, ctx, { timeoutMs: 20000 });
         const items = parseCards(html, cfg);
