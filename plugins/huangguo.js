@@ -1,7 +1,7 @@
 export const meta = {
   id: 'huangguo',
   name: '黄果短剧',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: '黄果短剧站点源：首页、分类、搜索、详情、HLS 播放与图文。封面走站点公开的 AES-CBC 图片协议。',
   author: 'community',
@@ -152,6 +152,29 @@ export default function (hg) {
       url: href,
       transform: { type: 'aes-cbc', key: COVER_KEY_B64, iv: COVER_IV_B64, padding: 'none' },
     };
+  }
+
+  function escapeAttr(v) {
+    return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/'/g, '&#39;');
+  }
+  // 正文图片：src 常是占位图、真图在 data-src；加密目录的图交给宿主解密（需要宿主的 article.image）
+  function richContent(html) {
+    if (typeof html !== 'string') return html;
+    const richImages = !!(hg.env && Array.isArray(hg.env.features) && hg.env.features.indexOf('article.image') >= 0);
+    return html.replace(/<img\b[^>]*>/gi, function (tag) {
+      const pick = function (name) {
+        const m = tag.match(new RegExp('\\b' + name + '\\s*=\\s*"([^"]*)"', 'i'));
+        return m ? m[1] : '';
+      };
+      const src = pick('data-src') || pick('data-original') || pick('src');
+      if (!src || /placeholder|poster_loading|zw\.png/i.test(src)) return '';
+      const alt = escapeAttr(pick('alt'));
+      const ref = coverRef(src);
+      const base = '<img src="' + escapeAttr(src) + '" alt="' + alt + '"';
+      // 旧宿主没有 article.image：加密图解不了，宁可不显示也不留破图
+      if (typeof ref !== 'string') return richImages ? base + " data-hpp='" + escapeAttr(JSON.stringify({ transform: ref.transform })) + "'>" : '';
+      return base + '>';
+    });
   }
 
   function tagList(tags) {
@@ -672,7 +695,7 @@ export default function (hg) {
         if (cover) detail.cover = cover;
         const html = data.content_html || data.content || data.html;
         const text = data.content_text || data.desc || data.text || data.content;
-        if (typeof html === 'string' && /<[a-z][\s\S]*>/i.test(html)) detail.contentHtml = html;
+        if (typeof html === 'string' && /<[a-z][\s\S]*>/i.test(html)) detail.contentHtml = richContent(html);
         else if (text) detail.contentText = String(text).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         const tags = tagList(data.tags);
         if (tags) detail.tags = tags;

@@ -1,7 +1,7 @@
 export const meta = {
   id: 'haose',
   name: '好色TV',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
   description: '好色TV（boot.pirvmpmir.cc）：成人视频、好色短剧、好色黑料（图文帖内嵌视频）、精选分类与搜索。播放走站点 playback 接口，封面为 AES-CBC 加密图。',
   author: 'community',
@@ -47,7 +47,10 @@ export default function (hg) {
   function imgRef(card) {
     const raw = card.attr('data-fallback-src') || card.attr('data-src') || card.attr('src') || '';
     if (!raw || /placeholder|poster_loading/.test(raw)) return undefined;
-    const url = abs(raw);
+    return imgUrlRef(abs(raw));
+  }
+  // 单张图地址 → 资源引用：加密图返回带 transform 的对象，明文图返回字符串
+  function imgUrlRef(url) {
     let path = '';
     try { path = new URL(url).pathname; } catch (_) { return url; }
     if (!/\/(upload_01|upload|uploads|xiao|hc237|upload-images)\//.test(path)) return url;
@@ -56,6 +59,7 @@ export default function (hg) {
     if (/^imgpublic\./.test(host)) return url;
     return { url, transform: { type: 'aes-cbc', key: IMG_KEY_B64, iv: IMG_IV_B64, padding: 'pkcs7' } };
   }
+  function bodyImgRef(raw) { return imgUrlRef(abs(raw)); }
   function clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
   function num(v) { const n = Number(v); return Number.isFinite(n) ? n : undefined; }
   function pageOf(c) { const n = parseInt(c || '1', 10); return Number.isFinite(n) && n > 0 ? n : 1; }
@@ -297,8 +301,21 @@ export default function (hg) {
         const d = { id: n, title: clean(h1 ? h1.text() : '') || ('黑料 ' + n) };
         const body = doc.first('.gossip-post__body');
         if (body) {
+          // 宿主声明 article.image 时，正文里的加密图交给宿主解密（<img data-hpp>），否则只能舍弃
+          const richImages = !!(hg.env && Array.isArray(hg.env.features) && hg.env.features.indexOf('article.image') >= 0);
           let h = body.html();
-          h = h.replace(/<img\b[^>]*>/gi, '').replace(/<p>\s*<\/p>/g, '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
+          h = h.replace(/<img\b[^>]*>/gi, function (tag) {
+            if (!richImages) return '';
+            const src = tag.match(/\bdata-src="([^"]+)"/) || tag.match(/\bsrc="([^"]+)"/) || tag.match(/\bdata-original="([^"]+)"/);
+            const raw = src ? src[1] : '';
+            if (!raw || /placeholder|poster_loading/.test(raw)) return '';
+            const ref = bodyImgRef(raw);
+            const alt = (tag.match(/\balt="([^"]*)"/) || [])[1] || '';
+            if (typeof ref === 'string') return '<img src="' + ref + '" alt="' + alt + '">';
+            return '<img src="' + ref.url + '" alt="' + alt + '" data-hpp=\''
+              + JSON.stringify({ transform: ref.transform }) + '\'>';
+          });
+          h = h.replace(/<p>\s*<\/p>/g, '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
           d.contentHtml = h;
           d.contentText = h.replace(/<\/(p|h\d|div)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n\s*\n+/g, '\n\n').trim();
         }

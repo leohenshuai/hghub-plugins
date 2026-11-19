@@ -1,7 +1,7 @@
 export const meta = {
   id: 'bl911',
   name: '911爆料网',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
   description: '911爆料网（吃瓜爆料、网红黑料）：图文文章列表与详情，以及帖子内嵌视频（DPlayer HLS）的分类、搜索、播放。封面按站点前端的 AES-CBC 图片协议解密。站点常换 CloudFront 地址，可在线路中切换或刷新。',
   author: 'community',
@@ -316,14 +316,23 @@ export default function (hg) {
       .replace(/<div class="article-action-row"[\s\S]*$/i, '');
     let firstImg = '';
     let encImgs = 0;
+    // 宿主声明 article.image 时，正文里的加密图可以交给宿主解密（<img data-hpp>），否则只能舍弃
+    const richImages = !!(hg.env && Array.isArray(hg.env.features) && hg.env.features.indexOf('article.image') >= 0);
     html = html.replace(/(<a\b[^>]*\bhref=")(\/[^"]*)"/gi, function (_, pre, path) { return pre + origin() + path + '"'; });
     html = html.replace(/<img\b[^>]*>/gi, function (tag) {
       const enc = tag.match(/data-xkrkllgl="([^"]+)"/);
       const src = enc ? enc[1] : ((tag.match(/\bdata-src="([^"]+)"/) || tag.match(/\bsrc="([^"]+)"/) || [])[1] || '');
       if (!src || /zw\.png|placeholder/.test(src)) return '';
       if (!firstImg) firstImg = src;
-      if (enc || isCdnImg(src)) { encImgs++; return ''; }   // 加密图片无法放进富文本（宿主不对正文图片做变换）
       const alt = (tag.match(/\balt="([^"]*)"/) || [])[1] || '';
+      if (enc || isCdnImg(src)) {
+        encImgs++;
+        if (!richImages) return '';
+        const ref = imageRef(src);
+        if (!ref || typeof ref === 'string') return '';
+        return '<img src="' + ref.url + '" alt="' + alt + '" data-hpp=\''
+          + JSON.stringify({ transform: ref.transform }) + '\'>';
+      }
       return '<img src="' + absUrl(src) + '" alt="' + alt + '">';
     });
     // 广告位删除后会留下不成对的 div；正文只需 p/h2/img/a，直接去掉 div 与 span 锚点

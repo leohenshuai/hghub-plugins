@@ -40,7 +40,7 @@
     {
       "id": "bl911",
       "name": "911爆料网",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "911爆料网（吃瓜爆料、网红黑料）：图文文章列表与详情，以及帖子内嵌视频（DPlayer HLS）的分类、搜索、播放。封面按站点前端的 AES-CBC 图片协议解密。站点常换 CloudFront 地址，可在线路中切换或刷新。",
       "url": "plugins/bl911.js"
     },
@@ -61,7 +61,7 @@
     {
       "id": "haose",
       "name": "好色TV",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "好色TV（boot.pirvmpmir.cc）：成人视频、好色短剧、好色黑料（图文帖内嵌视频）、精选分类与搜索。播放走站点 playback 接口，封面为 AES-CBC 加密图。",
       "url": "plugins/haose.js"
     },
@@ -82,7 +82,7 @@
     {
       "id": "huangguo",
       "name": "黄果短剧",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "url": "plugins/huangguo.js",
       "description": "黄果短剧站点源：首页、分类、搜索、详情、HLS 播放与图文。封面走站点公开的 AES-CBC 图片协议。"
     },
