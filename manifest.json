@@ -47,7 +47,7 @@
     {
       "id": "duobo",
       "name": "多播 duobo",
-      "version": "1.0.0",
+      "version": "1.0.2",
       "description": "多播 duobo.vip（草老板）：站内文章按日期与主播名匹配到对象存储里的 mp4，直接播放；分类、主播聚合、搜索。首次进入要建索引（约 10 秒），之后缓存 12 小时。",
       "url": "plugins/duobo.js"
     },
