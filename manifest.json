@@ -145,7 +145,7 @@
     {
       "id": "pornlulu",
       "name": "撸撸视频 Pornlulu",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Pornlulu（撸撸）：首页、分类、排行、搜索、详情与 HLS 播放。站点前置 CDNLah「工作量验证」（SHA-256 PoW），插件内自动求解并缓存通行 Cookie。",
       "url": "plugins/pornlulu.js"
     },
