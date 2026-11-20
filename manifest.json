@@ -1,6 +1,6 @@
 {
   "name": "HGhub 修复版片源",
-  "description": "HGhub 片源合集：CoderL98 修复 + 新增 + P91 移植，2026-11 体检通过（27 个源）。相对路径以本列表 URL 为基准。",
+  "description": "HGhub 片源合集：CoderL98 修复 + 新增 + P91 移植，2026-11 体检通过（28 个源）。相对路径以本列表 URL 为基准。",
   "plugins": [
     {
       "id": "4kav",
@@ -43,6 +43,13 @@
       "version": "1.0.1",
       "description": "911爆料网（吃瓜爆料、网红黑料）：图文文章列表与详情，以及帖子内嵌视频（DPlayer HLS）的分类、搜索、播放。封面按站点前端的 AES-CBC 图片协议解密。站点常换 CloudFront 地址，可在线路中切换或刷新。",
       "url": "plugins/bl911.js"
+    },
+    {
+      "id": "duobo",
+      "name": "多播 duobo",
+      "version": "1.0.0",
+      "description": "多播 duobo.vip（草老板）：站内文章按日期与主播名匹配到对象存储里的 mp4，直接播放；分类、主播聚合、搜索。首次进入要建索引（约 10 秒），之后缓存 12 小时。",
+      "url": "plugins/duobo.js"
     },
     {
       "id": "haijiao",
