@@ -1,7 +1,7 @@
 export const meta = {
   id: '91porn',
   name: '91porn',
-  version: '1.0.0',
+  version: '1.0.1',
   protocol: 1,
   description: '91porn（含镜像 sp2026.com，可在线路中切换）：分类、搜索、详情与 MP4 播放。',
   author: 'community',
@@ -250,6 +250,21 @@ export default function (hg) {
 
   function guessFormat(url) { return /\.m3u8(\?|$)/i.test(url) ? 'hls' : 'progressive'; }
 
+  // iOS/Safari 的硬件解码只支持 8 位 H.264；站内约 5% 的视频是 High 10（10 位），WebKit 直接报
+  // MEDIA_ERR_SRC_NOT_SUPPORTED。读文件头前 4KB 里的 avcC（实测 60 部都在第 546~558 字节），profile_idc=110 即 10 位。
+  // 探测失败（超时/网络）一律放行，宁可让播放器去试，也不误杀能播的视频。
+  async function avcProfile(url, ctx) {
+    try {
+      const res = await hg.http.fetch({ url, headers: Object.assign({ Range: 'bytes=0-4095' }, streamHeaders()), responseType: 'bytes', timeoutMs: 6000, maxBytes: 64 * 1024, signal: ctx && ctx.signal });
+      if (!res.ok && res.status !== 206) return 0;
+      const b = res.data;
+      for (let i = 0; i + 8 < b.length; i++) {
+        if (b[i] === 0x61 && b[i + 1] === 0x76 && b[i + 2] === 0x63 && b[i + 3] === 0x43) return b[i + 5];   // 'avcC' 后：version, profile_idc
+      }
+    } catch (_) {}
+    return 0;
+  }
+
   function streamHeaders() {
     const h = headers();
     // 视频 CDN（nginx）对不带 Connection 头的 curl 类客户端会在 TLS 层断开；浏览器/AVPlayer 均带此头
@@ -350,6 +365,14 @@ export default function (hg) {
         let m;
         if (!urls.length) while ((m = srcRe.exec(html))) if (urls.indexOf(m[1]) < 0) urls.push(m[1]);
         if (!urls.length) fail('UPSTREAM_CHANGED', '未解析到播放地址');
+        const mp4 = absUrl(urls[0]);
+        if (guessFormat(mp4) === 'progressive') {
+          const profile = await avcProfile(mp4, ctx);
+          if (profile === 110 || profile === 122 || profile === 244) {
+            const e = new hg.PluginError('UNSUPPORTED', '这部视频是 10 位色深（H.264 ' + (profile === 110 ? 'High 10' : 'profile ' + profile) + '），iPhone 的播放器无法解码，站点也没有提供其它清晰度');
+            throw e;
+          }
+        }
         return {
           streams: urls.map(function (u, i) {
             return { url: absUrl(u), kind: 'media', format: guessFormat(u), headers: streamHeaders(), label: '线路 ' + (i + 1) };
