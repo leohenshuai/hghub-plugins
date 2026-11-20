@@ -1,7 +1,7 @@
 export const meta = {
   id: 'duobo',
   name: '多播 duobo',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: '多播 duobo.vip（草老板）：站内文章按日期与主播名匹配到对象存储里的 mp4，直接播放；分类、主播聚合、搜索。首次进入要建索引（约 10 秒），之后缓存 12 小时。',
   author: 'community',
@@ -202,14 +202,9 @@ export default function (hg) {
   function hash32(s) { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x * 33) ^ s.charCodeAt(i)) >>> 0; return x.toString(36); }
   // 让出事件循环：宿主对单次同步执行有 1 秒切片上限，超过会被强行中断（连续 3 次后插件被停用）
   function tick() { return new Promise(function (r) { setTimeout(r, 0); }); }
-  // 日志：宿主「读取运行日志」可见；同时留一份内存环形缓冲，ui 操作可导出
-  const LOGS = [];
-  function log(msg) {
-    const line = new Date().toISOString().slice(11, 23) + ' ' + msg;
-    LOGS.push(line); if (LOGS.length > 120) LOGS.shift();
-    try { hg.log.info('[duobo] ' + msg); } catch (_) {}
-  }
-  function logErr(where, e) { log('ERROR ' + where + ': ' + ((e && (e.code ? e.code + ' ' : '') + (e.message || e)) || e)); }
+  // 诊断由宿主的「诊断中心」统一记录（每次调用的方法/耗时/错误），插件内不再自带日志系统
+  function log() {}
+  function logErr() {}
   async function dedupeAsync(list) {
     const seen = {}; const out = []; let t0 = Date.now();
     for (const h of list) { if (!seen[h]) { seen[h] = 1; out.push(h); } if (Date.now() - t0 > 40) { await tick(); t0 = Date.now(); } }
@@ -556,18 +551,6 @@ export default function (hg) {
     return Object.keys(cnt).filter(function (k) { return cnt[k] >= 3; }).sort(function (a, b) { return cnt[b] - cnt[a]; }).slice(0, n).map(function (k) { return { id: 'a:' + k, label: k + ' (' + cnt[k] + ')' }; });
   }
 
-  // 给每个对外方法包一层：记录入口参数、耗时与错误，便于「读取运行日志」定位
-  function traced(name, fn) {
-    return async function (params, ctx) {
-      const t = Date.now();
-      let brief = '';
-      try { brief = JSON.stringify(params || {}).slice(0, 120); } catch (_) {}
-      log('→ ' + name + ' ' + brief);
-      try { const r = await fn(params, ctx); log('← ' + name + ' 完成 ' + (Date.now() - t) + 'ms'); return r; }
-      catch (e) { logErr(name + ' (' + (Date.now() - t) + 'ms)', e); throw e; }
-    };
-  }
-
   const api = {
     home: {
       async getSections(params, ctx) {
@@ -673,27 +656,14 @@ export default function (hg) {
       async getActions() {
         return [
           { id: 'rebuild', label: '重建索引', description: '重新读取文件清单与文章并重新匹配', form: { fields: [] } },
-          { id: 'logs', label: '查看诊断日志', description: '显示最近 40 条内部日志，反馈问题时请截图', form: { fields: [] } },
         ];
       },
       async submit(params, ctx) {
-        if (params && params.actionId === 'logs') {
-          return { status: 'ok', message: LOGS.slice(-40).join('\n') || '暂无日志' };
-        }
         const idx = await index(ctx, true);
         return { status: 'ok', message: '已重建：文件 ' + idx.stat.files + '，文章 ' + idx.stat.posts + '，匹配到 ' + idx.stat.matchedPosts + ' 篇，未匹配文件 ' + idx.stat.unmatched };
       },
     },
   };
 
-  // 统一包装
-  api.home.getSections = traced('home.getSections', api.home.getSections);
-  api.home.listSection = traced('home.listSection', api.home.listSection);
-  api.catalog.getCategories = traced('catalog.getCategories', api.catalog.getCategories);
-  api.catalog.list = traced('catalog.list', api.catalog.list);
-  api.search.search = traced('search.search', api.search.search);
-  api.media.getDetail = traced('media.getDetail', api.media.getDetail);
-  api.media.resolvePlayback = traced('media.resolvePlayback', api.media.resolvePlayback);
-  log('插件已加载 v' + '1.0.2' + ' features=' + JSON.stringify((hg.env && hg.env.features) || []));
   return api;
 }
