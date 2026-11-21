@@ -147,10 +147,24 @@ const hg = {
   log: { debug() {}, info() {}, warn() {}, error() {} },
   http: { fetch: hostAsync('http.fetch', curl) },
   html: { parse: hostSync('html.parse', h => wrapNode(parseHTML(h))) },
-  crypto: { digest: hostSync('crypto.digest', (alg, data) => sha256Bytes(typeof data === 'string' ? data : String.fromCharCode.apply(null, data))) },
+  crypto: {
+    digest: hostSync('crypto.digest', (alg, data) => sha256Bytes(typeof data === 'string' ? data : String.fromCharCode.apply(null, data))),
+    hmac: hostSync('crypto.hmac', () => new Uint8Array(32)),
+    randomBytes: hostSync('crypto.randomBytes', n => { const o = new Uint8Array(n || 16); for (let i = 0; i < o.length; i++) o[i] = Math.floor(Math.random() * 256); return o; }),
+    randomUUID: hostSync('crypto.randomUUID', () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); })),
+    // 这里只保证「能跑完流程」，不保证解密结果正确：卡死检查只关心同步执行时长
+    aesEncrypt: hostSync('crypto.aes', (p, d) => (typeof d === 'string' ? Uint8Array.from(enc(d), c => c.charCodeAt(0)) : d)),
+    aesDecrypt: hostSync('crypto.aes', (p, d) => (typeof d === 'string' ? Uint8Array.from(enc(d), c => c.charCodeAt(0)) : d)),
+    rsaEncrypt: hostSync('crypto.rsa', (p, d) => d),
+  },
   codec: {
-    base64Encode: hostSync('codec', s => btoaLike(s)), base64Decode: hostSync('codec', s => s),
-    utf8Encode: hostSync('codec', s => Uint8Array.from(enc(s), c => c.charCodeAt(0))), utf8Decode: hostSync('codec', b => decodeURIComponent(escape(String.fromCharCode.apply(null, b)))),
+    base64Encode: hostSync('codec', v => btoaLike(typeof v === 'string' ? v : String.fromCharCode.apply(null, v))),
+    base64Decode: hostSync('codec', v => atobLike(String(v))),
+    utf8Encode: hostSync('codec', v => Uint8Array.from(enc(String(v)), c => c.charCodeAt(0))),
+    utf8Decode: hostSync('codec', b => { try { return decodeURIComponent(escape(String.fromCharCode.apply(null, b))); } catch (e) { return String.fromCharCode.apply(null, b); } }),
+    hexEncode: hostSync('codec', b => Array.from(b).map(x => (x < 16 ? '0' : '') + x.toString(16)).join('')),
+    hexDecode: hostSync('codec', h => { const o = new Uint8Array(String(h).length >> 1); for (let i = 0; i < o.length; i++) o[i] = parseInt(String(h).substr(i * 2, 2), 16); return o; }),
+    decodeText: hostSync('codec', (b) => { try { return decodeURIComponent(escape(String.fromCharCode.apply(null, b))); } catch (e) { return String.fromCharCode.apply(null, b); } }),
   },
   storage: {
     get: hostAsync('storage', k => store[k]), set: hostAsync('storage', (k, v) => { store[k] = v; }),
@@ -158,6 +172,15 @@ const hg = {
   },
   cookies: { set: hostAsync('cookies', () => {}), get: hostAsync('cookies', () => []) },
 };
+function atobLike(s) {
+  const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  s = String(s).replace(/[^A-Za-z0-9+/]/g, ''); const out = [];
+  for (let i = 0; i < s.length; i += 4) {
+    const n = (c.indexOf(s[i]) << 18) | (c.indexOf(s[i + 1]) << 12) | ((c.indexOf(s[i + 2]) & 63) << 6) | (c.indexOf(s[i + 3]) & 63);
+    out.push((n >> 16) & 255); if (s[i + 2]) out.push((n >> 8) & 255); if (s[i + 3]) out.push(n & 255);
+  }
+  return new Uint8Array(out);
+}
 function btoaLike(s) { const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'; let o = '', i = 0; s = enc(s); while (i < s.length) { const a = s.charCodeAt(i++), b = s.charCodeAt(i++), d = s.charCodeAt(i++); o += c[a >> 2] + c[((a & 3) << 4) | (b >> 4)] + (isNaN(b) ? '=' : c[((b & 15) << 2) | (d >> 6)]) + (isNaN(d) ? '=' : c[d & 63]); } return o; }
 // 插件里的 setTimeout 也是让出点
 globalThis.setTimeout = (fn, ms) => { leave('setTimeout'); return os.setTimeout(() => { enter('setTimeout'); fn(); }, ms || 0); };

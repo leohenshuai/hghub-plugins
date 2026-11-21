@@ -14,7 +14,7 @@ const guardOf = id => guards.find(g => g.id === id);
 
 // 问题分级：播放不了 > 分类/搜索坏 > 轻微
 function severity(r, g) {
-  if (g && g.verdict === 'STUCK') return 2;
+  if (g && g.verdict === 'STUCK') return 2;   // ERROR 是检查器自身的问题，不算插件故障
   if (!r || r.problems === undefined) return 2;
   const p = r.problems || [];
   if (p.some(x => /加载失败|视频流不可用|播放解析失败|播放无流|首页失败|分类列表失败/.test(x))) return 2;
@@ -46,7 +46,7 @@ const head = `# 片源状态
 `;
 const body = rows.map(r => {
   const g = r.g;
-  const gTxt = !g ? '-' : g.verdict === 'STUCK' ? `**卡死**` : g.ms !== undefined ? `${g.ms}ms` : '-';
+  const gTxt = !g ? '-' : g.verdict === 'STUCK' ? '**卡死**' : g.verdict === 'ERROR' ? '检查器异常' : g.ms !== undefined ? `${g.ms}ms` : '-';
   const probs = r.problems.length ? r.problems.slice(0, 3).map(x => x.replace(/\|/g, '/')).join('；') + (r.problems.length > 3 ? ` 等 ${r.problems.length} 项` : '') : '';
   return `| ${icon(r.s)} | ${r.name} \`${r.id}\` | ${r.version} | ${r.cats ?? '-'} | ${r.home ?? '-'} | ${(r.stream || '-').slice(0, 24)} | ${gTxt} | ${probs} |`;
 }).join('\n');

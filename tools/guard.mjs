@@ -33,8 +33,10 @@ for (const id of ids) {
   const line = out.trim().split('\n').filter(l => l.startsWith('{')).pop();
   let r = null; try { r = JSON.parse(line); } catch {}
   if (!r) {
-    // 没有任何结果 = 卡在同步执行里出不来，正是 App 中「运行时连续故障」的成因
-    rows.push({ id, verdict: 'STUCK', note: timedOut ? `${LIMIT}s 内无结果（卡在同步执行中）` : '无输出' });
+    // 没有结果分两种：被外部超时杀掉（卡在同步执行里出不来，正是「运行时连续故障」的成因），
+    // 或者脚本自己异常退出（测量工具的问题，不该算到插件头上）。
+    const tail = out.trim().split('\n').slice(-1)[0] || '';
+    rows.push({ id, verdict: timedOut ? 'STUCK' : 'ERROR', note: timedOut ? `${LIMIT}s 内无结果（卡在同步执行中）` : ('检查器异常：' + tail.slice(0, 120)) });
   } else {
     const ms = r.maxSliceMs || 0;
     rows.push({ id, verdict: ms > 1000 ? 'STUCK' : ms > WARN_MS ? 'WARN' : 'ok', ms, at: r.at, steps: (r.steps || []).join(' / '), note: r.error });
@@ -43,6 +45,8 @@ for (const id of ids) {
   console.log(`${last.verdict.padEnd(6)} ${id.padEnd(12)} ${last.ms !== undefined ? String(last.ms) + 'ms' : ''} ${last.at || ''} ${last.note || ''}`);
 }
 const bad = rows.filter(r => r.verdict === 'STUCK');
+const errs = rows.filter(r => r.verdict === 'ERROR');
+if (errs.length) console.log(`另有 ${errs.length} 个源检查器自身出错（不计入卡死）：${errs.map(e => e.id).join(' ')}`);
 console.log(`\n合计 ${rows.length} 个：卡死 ${bad.length}，偏慢 ${rows.filter(r => r.verdict === 'WARN').length}`);
 if (process.env.GUARD_JSON) console.log('JSON ' + JSON.stringify(rows));
 process.exit(bad.length ? 1 : 0);
