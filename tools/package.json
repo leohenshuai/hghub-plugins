@@ -1,0 +1,1 @@
+{ "name": "hghub-plugins-tools", "private": true, "type": "module", "dependencies": { "linkedom": "^0.18.0" } }

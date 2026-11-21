@@ -39,3 +39,17 @@
 ## 未收录（站点已失效）
 
 嗷呜动漫、天天影视、anfuns、小红影视、绝对影视、韩剧看看、短剧天堂、烧火电影（源站持续 Cloudflare 522）。
+
+## 维护
+
+- **每日体检**：GitHub Actions 每天自动跑一遍全部源（分类抽样、首页、搜索、详情、实际请求视频流），
+  并在 QuickJS 里测「最长连续同步执行」（App 超过 1 秒会强行中断插件，表现为「运行时连续故障」）。
+  结果写入 [STATUS.md](STATUS.md)，有问题时自动开/更新一个 `audit` issue。
+- **手动跑**：Actions → 片源每日体检 → Run workflow，可只填几个源的 id。
+- **本地跑**：
+  ```sh
+  cd tools && npm install
+  node tools/audit.mjs <id...]          # 功能体检，不传 id = 全部
+  node tools/guard.mjs <id...>          # 卡死检查（需要 qjs：apk add quickjs）
+  node tools/report.mjs audit.jsonl guard.log   # 生成 STATUS.md
+  ```
