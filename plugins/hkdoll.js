@@ -1,7 +1,7 @@
 export const meta = {
   id: 'hkdoll',
   name: '玩偶姐姐',
-  version: '1.0.3',
+  version: '1.0.4',
   protocol: 1,
   description: '玩偶姐姐：分类、搜索、详情与 XOR 解密播放。',
   author: 'community',
@@ -140,6 +140,22 @@ export default function (hg) {
     return 'progressive';
   }
 
+  // 站点会给出多个 CDN 节点，有些早已下线（t26 404、cdn2025.life 连不上）。
+  // 解析时并发探一次，把真能取到清单的排前面；全都不通才如实报错，不让播放器先黑屏一次。
+  async function pickWorking(urls, ctx) {
+    const probe = async (u) => {
+      try {
+        const res = await hg.http.fetch({ url: u, headers: headers(), responseType: 'text', timeoutMs: 6000, maxBytes: 256 * 1024, signal: ctx && ctx.signal });
+        const body = typeof res.data === 'string' ? res.data : '';
+        return res.ok && /^#EXTM3U/.test(body.trim()) ? u : null;
+      } catch (_) { return null; }
+    };
+    const ok = (await Promise.all(urls.map(probe))).filter(Boolean);
+    if (!ok.length) return null;
+    const rest = urls.filter(function (u) { return ok.indexOf(u) < 0; });
+    return ok.concat(rest);
+  }
+
   return {
     endpoints: { list() { return [{ id: 'main', label: '主站', url: SITE }]; } },
 
@@ -210,9 +226,14 @@ export default function (hg) {
         const playUrl = getPlayUrl(embedUrl);
         if (!playUrl) fail('UPSTREAM_CHANGED', '播放地址解密失败');
         // 站点仍返回早年的 CDN 节点（t26/t27…），多数已下线 404；同路径在当前节点 t33 可用（2026-11 实测）
-        const urls = [playUrl];
+        let urls = [playUrl];
         const alt = playUrl.replace(/\/\/t\d+\.cdn2020\.com\//, '//' + CDN_NODE + '.cdn2020.com/');
         if (alt !== playUrl) urls.unshift(alt);   // 当前节点优先，原地址兜底
+        if (/\.m3u8/i.test(playUrl)) {
+          const sorted = await pickWorking(urls, ctx);
+          if (!sorted) fail('UNAVAILABLE', '这部影片的播放节点已下线（站点给出的 CDN 地址都连不上）');
+          urls = sorted;
+        }
         return {
           streams: urls.map(function (u, i) {
             return { url: u, kind: 'media', format: guessFormat(u), headers: headers(), label: i === 0 && urls.length > 1 ? '线路 1' : '线路 ' + (i + 1) };

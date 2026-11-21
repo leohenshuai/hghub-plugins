@@ -1,7 +1,7 @@
 export const meta = {
   id: 'mwxk62',
   name: 'KKAV',
-  version: '1.0.3',
+  version: '1.0.4',
   protocol: 1,
   description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名每天会变，插件自动解析）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
   author: 'community',
@@ -252,6 +252,22 @@ export default function (hg) {
     };
   }
 
+  // 「极速」等线路会间歇性连不上（实测同一部片 h3 节点 000、备用节点 200）。
+  // 解析时并发探一次，能取到清单的排前面；全不通才报错。
+  async function orderByWorking(streams, ctx) {
+    const probe = async (st) => {
+      try {
+        const res = await hg.http.fetch({ url: st.url, headers: st.headers, responseType: 'text', timeoutMs: 6000, maxBytes: 256 * 1024, signal: ctx && ctx.signal });
+        const body = typeof res.data === 'string' ? res.data : '';
+        return res.ok && /^#EXTM3U/.test(body.trim());
+      } catch (_) { return false; }
+    };
+    const flags = await Promise.all(streams.map(probe));
+    const ok = streams.filter(function (_, i) { return flags[i]; });
+    const bad = streams.filter(function (_, i) { return !flags[i]; });
+    return { list: ok.concat(bad), anyOk: ok.length > 0 };
+  }
+
   return {
     home: {
       async getSections(params, ctx) {
@@ -405,7 +421,9 @@ export default function (hg) {
           if (l.id === line.id) return;
           streams.push({ url: l.base + p.h264 + 'index.m3u8', kind: 'media', format: 'hls', codec: 'h264', label: '720P · ' + l.label + '（备用）', height: 720, serverId: l.id, headers: headers() });
         });
-        return { streams: streams, servers: lines.map(function (l) { return { id: l.id, label: l.label }; }) };
+        const ordered = await orderByWorking(streams, ctx);
+        if (!ordered.anyOk) fail('UNAVAILABLE', '这部影片的播放节点暂时都连不上，请稍后重试或换一部');
+        return { streams: ordered.list, servers: lines.map(function (l) { return { id: l.id, label: l.label }; }) };
       },
 
       matchUrl(params) {
