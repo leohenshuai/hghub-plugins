@@ -1,7 +1,7 @@
 export const meta = {
   id: 'xx9',
   name: '主播视频',
-  version: '1.0.2',
+  version: '1.0.3',
   protocol: 1,
   description: '主播视频（xx9.com）：点播源。分类、搜索、专题、详情与 HLS 播放。接口为 AES-ECB 加密网关（密钥按时间戳尾数轮换），自动获取 jwtToken 与游客 accessToken；封面为单字节 XOR 加密。',
   author: 'community',
@@ -427,7 +427,7 @@ export default function (hg) {
           if (a.duration) e.durationSec = a.duration;
           return e;
         });
-        if (!eps.length) fail('UNAVAILABLE', '该视频没有可播放地址');
+        if (!eps.length) fail('CONTENT_LOCKED', '该视频没有可播放地址');
         delete base.entryEpisodeId;
         base.playlists = [{ id: 'main', label: '默认', episodes: eps }];
         return base;
@@ -441,7 +441,7 @@ export default function (hg) {
         const list = addrList(vod);
         const idx = Math.max(0, Math.min(list.length - 1, parseInt(params.episodeId || '0', 10) || 0));
         const a = list[idx];
-        if (!a) fail('UNAVAILABLE', '该视频没有可播放地址');
+        if (!a) fail('CONTENT_LOCKED', '该视频没有可播放地址');
         const servers = cfg.lines.map(function (l, i) { return { id: String(i), label: l.name }; });
         let sid = params.serverId != null && params.serverId !== '' ? parseInt(params.serverId, 10) : -1;
         const path = a.addr.charAt(0) === '/' ? a.addr : '/' + a.addr;

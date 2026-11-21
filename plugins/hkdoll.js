@@ -1,7 +1,7 @@
 export const meta = {
   id: 'hkdoll',
   name: '玩偶姐姐',
-  version: '1.0.4',
+  version: '1.0.5',
   protocol: 1,
   description: '玩偶姐姐：分类、搜索、详情与 XOR 解密播放。',
   author: 'community',
@@ -99,16 +99,21 @@ export default function (hg) {
   function parseCards(html) {
     const doc = hg.html.parse(html);
     const items = [];
+    const seen = {};   // 首页同一部片会在多个板块重复出现（实测 180 个节点里只有 167 个唯一地址），
+                       // 不去重宿主会逐条报 warn「重复条目已丢弃」，还会挤掉上限内的真条目
     const nodes = doc.select('.video-item');
     for (let i = 0; i < nodes.length; i++) {
       const a = nodes[i].first('.thumb a');
       const href = a && a.attr('href');
       const title = a && a.attr('title');
       if (!href || !title) continue;
+      const id = absUrl(href);
+      if (seen[id]) continue;
+      seen[id] = true;
       const img = nodes[i].first('.thumb img');
       const cover = img && (img.attr('data-src') || img.attr('src'));
       const dur = nodes[i].first('.duratio');
-      const item = { id: absUrl(href), title: title.trim(), type: 'movie' };
+      const item = { id: id, title: title.trim(), type: 'movie' };
       if (cover) item.cover = absUrl(cover);
       if (dur) {
         const note = dur.text().trim();
@@ -140,7 +145,7 @@ export default function (hg) {
     return 'progressive';
   }
 
-  // 站点会给出多个 CDN 节点，有些早已下线（t26 404、cdn2025.life 连不上）。
+  // 站点会给出多个 CDN 节点，有些早已下线（t26 404），有些证书过期（见 resolvePlayback 注释）。
   // 解析时并发探一次，把真能取到清单的排前面；全都不通才如实报错，不让播放器先黑屏一次。
   async function pickWorking(urls, ctx) {
     const probe = async (u) => {
@@ -231,7 +236,7 @@ export default function (hg) {
         if (alt !== playUrl) urls.unshift(alt);   // 当前节点优先，原地址兜底
         if (/\.m3u8/i.test(playUrl)) {
           const sorted = await pickWorking(urls, ctx);
-          if (!sorted) fail('UNAVAILABLE', '这部影片的播放节点已下线（站点给出的 CDN 地址都连不上）');
+          if (!sorted) fail('NETWORK', '这部影片的播放节点连不上（站点下发的 CDN 域名证书已过期，iOS 会拒绝连接）');
           urls = sorted;
         }
         return {

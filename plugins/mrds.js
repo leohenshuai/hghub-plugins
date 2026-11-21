@@ -1,7 +1,7 @@
 export const meta = {
   id: 'mrds',
   name: '每日大赛',
-  version: '1.0.1',
+  version: '1.0.2',
   protocol: 1,
   description: '每日大赛（mrds.com，吃瓜站，含多条镜像线路可切换）：15 个栏目、搜索、详情与 HLS 播放。',
   author: 'community',
@@ -180,7 +180,7 @@ export default function (hg) {
         const idx = mm[2] ? parseInt(mm[2], 10) : 0;
         const html = await fetchHtml(origin() + '/archives/' + mm[1] + '/', ctx);
         const list = dplayers(html);
-        if (!list.length) fail('UNAVAILABLE', '该文章没有视频（可能是纯图文帖）');
+        if (!list.length) fail('UNSUPPORTED', '该文章没有视频（可能是纯图文帖）');
         const v = list[idx] || list[0];
         // 签名 URL（auth_key）有时效，每次现取；CDN 校验 Referer
         return { streams: [{ url: abs(v.url), kind: 'media', format: /m3u8/i.test(v.url + v.type) ? 'hls' : 'progressive', headers: headers(), label: '默认' }] };

@@ -1,7 +1,7 @@
 export const meta = {
   id: 'mwxk62',
   name: 'KKAV',
-  version: '1.0.4',
+  version: '1.0.5',
   protocol: 1,
   description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名每天会变，插件自动解析）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
   author: 'community',
@@ -88,7 +88,7 @@ export default function (hg) {
         }
       } catch (_) {}
     }
-    fail('UNAVAILABLE', '无法解析 KKAV 当前可用域名（入口 ' + ENTRY + ' 的跳转目标都打不开）');
+    fail('UPSTREAM_ERROR', '无法解析 KKAV 当前可用域名（入口 ' + ENTRY + ' 的跳转目标都打不开）');
   }
 
   function fail(code, message, extra) {
@@ -422,7 +422,7 @@ export default function (hg) {
           streams.push({ url: l.base + p.h264 + 'index.m3u8', kind: 'media', format: 'hls', codec: 'h264', label: '720P · ' + l.label + '（备用）', height: 720, serverId: l.id, headers: headers() });
         });
         const ordered = await orderByWorking(streams, ctx);
-        if (!ordered.anyOk) fail('UNAVAILABLE', '这部影片的播放节点暂时都连不上，请稍后重试或换一部');
+        if (!ordered.anyOk) fail('NETWORK', '这部影片的播放节点暂时都连不上，请稍后重试或换一部');
         return { streams: ordered.list, servers: lines.map(function (l) { return { id: l.id, label: l.label }; }) };
       },
 

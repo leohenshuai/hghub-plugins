@@ -1,7 +1,7 @@
 export const meta = {
   id: 'pornlulu',
   name: '撸撸视频 Pornlulu',
-  version: '1.0.1',
+  version: '1.0.2',
   protocol: 1,
   description: 'Pornlulu（撸撸）：首页、分类、排行、搜索、详情与 HLS 播放。站点前置 CDNLah「工作量验证」（SHA-256 PoW），插件内自动求解并缓存通行 Cookie。',
   author: 'community',
@@ -138,7 +138,8 @@ export default function (hg) {
         if (ctx && ctx.signal && ctx.signal.aborted) { powProgress[seed] = n; return null; }
         if (ctx && typeof ctx.deadline === 'number' && ctx.deadline - Date.now() < 2000) {
           powProgress[seed] = n + 1;
-          fail('UNAVAILABLE', '站点安全验证计算中（已尝试 ' + (n + 1) + ' 次），请稍后下拉刷新');
+          // RATE_LIMITED 要带 retryAfterSec，宿主据此在该时间内禁止重试并提示（协议 §8.2）
+          fail('RATE_LIMITED', '站点安全验证计算中（已尝试 ' + (n + 1) + ' 次），请稍后下拉刷新', { retryAfterSec: 3 });
         }
         await tick();
         slice = Date.now();
@@ -181,10 +182,10 @@ export default function (hg) {
     const difficulty = Number(cfg.difficulty || 0);
     if (!seed || !difficulty || !cfg.verify_path) fail('UPSTREAM_CHANGED', '安全验证页结构已变化');
     if (difficulty > MAX_DIFFICULTY) {
-      fail('UNAVAILABLE', '站点工作量验证难度过高（' + difficulty + ' 位），插件内无法在合理时间内求解');
+      fail('UNSUPPORTED', '站点工作量验证难度过高（' + difficulty + ' 位），插件内无法在合理时间内求解');
     }
     const nonce = await solvePow(seed, difficulty, ctx);
-    if (!nonce) fail('UNAVAILABLE', '工作量验证求解失败');
+    if (!nonce) fail('UPSTREAM_ERROR', '工作量验证求解失败');
     const form = {
       seed,
       nonce,
@@ -310,7 +311,7 @@ export default function (hg) {
       }
       if (out.length) return out;
     } catch (e) {
-      if (e && e.code === 'UNAVAILABLE') throw e;
+      if (e && e.code === 'RATE_LIMITED') throw e;
     }
     return FALLBACK_CATS.map(function (c) { return { id: 'cat:' + c[0], label: c[1], sorts: SORTS }; });
   }
