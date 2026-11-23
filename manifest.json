@@ -124,8 +124,8 @@
     {
       "id": "mwxk62",
       "name": "KKAV",
-      "version": "1.0.5",
-      "description": "KKAV（入口 62mwxk.com 是跳板页，真实域名每天会变，插件自动解析）：点播源。站点根目录是 meta refresh → /index.htm 年龄确认页 → /home.htm 真实片库。分类、搜索、详情与 HLS 播放（AES-128 加密分片，由播放器按 m3u8 自行解密）。",
+      "version": "1.1.0",
+      "description": "KKAV（入口 62mwxk.com 是跳板页，真实域名会变，插件自动解析）：点播源。2026-11-23 站点迁移到新版 H5 平台（/api 接口，ENC3 封包），本版按新接口重写分类、列表、搜索、首页与详情；播放走原 m3u8 节点（AES-128 加密分片，由播放器按 m3u8 自行解密）。",
       "url": "plugins/mwxk62.js"
     },
     {
