@@ -1,9 +1,9 @@
 export const meta = {
   id: 'mwxk62',
   name: 'KKAV',
-  version: '1.1.1',
+  version: '1.1.2',
   protocol: 1,
-  description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名会变，插件自动解析）：点播源。2026-11-23 站点已迁移到新版 H5 平台（uni-app + /api 接口，响应为 ENC3 XOR 封包），本版按新接口重写：分类 /movie/tags、列表与搜索 /movie/list、首页 /movie/home_sections、详情 /movie/{id}。封面与站点前端一致：不用 smallpic 直链（该域名图床不可达），而是取 /config/ini 的 tupath 拼 cover_64_2/<路径>.txt，内容为 data URI 文本，由插件 transformResource 解包。播放仍走原来的 m3u8 节点（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
+  description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名会变，插件自动解析）：点播源。2026-11-23 站点已迁移到新版 H5 平台（uni-app + /api 接口，响应为 ENC3 XOR 封包），本版按新接口重写：分类 /movie/tags、列表与搜索 /movie/list、首页 /movie/home_sections、详情 /movie/{id}。封面走 cover_64_2/<路径>.txt（data URI 文本，插件解包）；注意 /config/ini 里的 tupath 是已失效的占位域名（DNS 不存在），封面基址改为探测可用者，兜底用仍在服务的旧图床。播放仍走原来的 m3u8 节点（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
   author: 'community',
   kind: 'source',
   mature: true,
@@ -25,8 +25,9 @@ const M3U8_LINES = [
 ];
 // 新站接口 ENC3 封包的默认口令（站点前端 bundle 的默认值，运行时以此解包）
 const ENC_PASS = 'Mumu2026#';
-// 封面基址兜底（运行时从 /config/ini 的 system.tupath 读，2026-11-23 实测值）
-const FALLBACK_TUPATH = 'https://sq.2277ww.com';
+// 封面基址兜底：/config/ini 的 tupath（sq.2277ww.com）是失效占位（公共 DNS 查不到，NXDOMAIN）；
+// 旧图床 ddd.aisheji8.com/data 仍在服务且存有新站全部封面（2026-11-24 实测）
+const FALLBACK_TUPATH = 'https://ddd.aisheji8.com/data';
 const PAGE_SIZE = 20;
 // 分类兜底（与旧版一致；新接口 /movie/tags 正常时不用）
 const FALLBACK_GROUPS = [
@@ -109,7 +110,18 @@ export default function (hg) {
 
   async function api(path, ctx, opts) {
     await resolveSite(ctx);
-    const text = await fetchText(SITE + '/api' + path, ctx, opts);
+    let text;
+    try {
+      text = await fetchText(SITE + '/api' + path, ctx, opts);
+    } catch (e) {
+      // 网络层失败（超时/DNS）：清掉域名缓存重新解析并重试一次，扛设备网络抖动
+      if (e && e.code) throw e;
+      if (opts && opts._retried) throw e;
+      siteAt = 0;
+      try { await hg.storage.delete('site:v2'); } catch (_) {}
+      await resolveSite(ctx);
+      return api(path, ctx, Object.assign({}, opts || {}, { _retried: true }));
+    }
     if (text == null) return null;
     let obj;
     try { obj = JSON.parse(text); } catch (_) {
@@ -128,10 +140,11 @@ export default function (hg) {
   // 再按「当天序号 % 数量」选一个拼 www. 跳转。变化在目标站本身：旧片库页面已下线，
   // 新站是 H5 平台，验证方式改为请求 /api/movie/tags 看是否返回 ENC3 封包。
   async function resolveSite(ctx) {
-    if (siteAt && Date.now() - siteAt < 30 * 60 * 1000) return SITE;
+    if (siteAt && Date.now() - siteAt < 12 * 3600 * 1000) return SITE;
     const cached = await hg.storage.get('site:v2');
-    if (cached && cached.url && cached.at && Date.now() - cached.at < 30 * 60 * 1000) { SITE = cached.url; siteAt = cached.at; return SITE; }
+    if (cached && cached.url && cached.at && Date.now() - cached.at < 12 * 3600 * 1000) { SITE = cached.url; siteAt = cached.at; return SITE; }
     const cands = [];
+    if (cached && cached.url) cands.push(cached.url);
     try {
       const res = await hg.http.fetch({ url: ENTRY + '/home.htm', headers: { 'User-Agent': UA }, responseType: 'text', timeoutMs: 12000, signal: ctx && ctx.signal });
       const html = typeof res.data === 'string' ? res.data : '';
@@ -158,32 +171,46 @@ export default function (hg) {
       const base = cands[i];
       if (tried[base]) continue;
       tried[base] = 1;
-      try {
-        const r = await hg.http.fetch({ url: base + '/api/movie/tags', headers: { 'User-Agent': UA, Referer: base + '/' }, responseType: 'text', timeoutMs: 10000, signal: ctx && ctx.signal });
-        if (r.ok && typeof r.data === 'string' && (r.data.indexOf('"enc":3') >= 0 || r.data.indexOf('"code":0') >= 0)) {
-          SITE = base; siteAt = Date.now();
-          try { await hg.storage.set('site:v2', { url: base, at: siteAt }, { ttlSec: 3600 }); } catch (_) {}
-          return SITE;
-        }
-      } catch (_) {}
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r = await hg.http.fetch({ url: base + '/api/movie/tags', headers: { 'User-Agent': UA, Referer: base + '/' }, responseType: 'text', timeoutMs: 10000, signal: ctx && ctx.signal });
+          if (r.ok && typeof r.data === 'string' && (r.data.indexOf('"enc":3') >= 0 || r.data.indexOf('"code":0') >= 0)) {
+            SITE = base; siteAt = Date.now();
+            try { await hg.storage.set('site:v2', { url: base, at: siteAt }, { ttlSec: 12 * 3600 }); } catch (_) {}
+            return SITE;
+          }
+          break;
+        } catch (_) {}
+      }
     }
     fail('UPSTREAM_ERROR', '无法解析 KKAV 当前可用域名（入口 ' + ENTRY + ' 的跳转目标都打不开）');
   }
 
-  // 站点配置（封面基址 tupath）；缓存 6 小时，失败用兜底
+  // 封面基址：/config/ini 的 tupath 可能是失效占位域名，必须先探活（任意 HTTP 响应都算活，
+  // 连接/DNS 失败算死）；探不活就用兜底图床。结果缓存 6 小时。
   let cfgMem = null;
   async function configIni(ctx) {
     if (cfgMem) return cfgMem;
-    const cached = await hg.storage.get('cfg:v2');
+    const cached = await hg.storage.get('cfg:v3');
     if (cached && cached.tupath) { cfgMem = cached; return cfgMem; }
-    const cfg = { tupath: FALLBACK_TUPATH };
+    const candidates = [];
     try {
       const res = await api('/config/ini', ctx, { allowFail: true, timeoutMs: 12000 });
       const tu = res && res.data && res.data.system && res.data.system.tupath;
-      if (tu && /^https?:\/\//.test(String(tu))) cfg.tupath = String(tu);
+      if (tu && /^https?:\/\//.test(String(tu))) candidates.push(String(tu).replace(/\/+$/, ''));
     } catch (_) {}
+    if (candidates.indexOf(FALLBACK_TUPATH) < 0) candidates.push(FALLBACK_TUPATH);
+    let chosen = FALLBACK_TUPATH;
+    for (let i = 0; i < candidates.length; i++) {
+      try {
+        await hg.http.fetch({ url: candidates[i] + '/', responseType: 'text', timeoutMs: 8000, maxBytes: 1024, signal: ctx && ctx.signal });
+        chosen = candidates[i];
+        break;
+      } catch (_) {}
+    }
+    const cfg = { tupath: chosen };
     cfgMem = cfg;
-    try { await hg.storage.set('cfg:v2', cfg, { ttlSec: 6 * 3600 }); } catch (_) {}
+    try { await hg.storage.set('cfg:v3', cfg, { ttlSec: 6 * 3600 }); } catch (_) {}
     return cfg;
   }
 
