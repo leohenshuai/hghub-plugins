@@ -1,9 +1,9 @@
 export const meta = {
   id: 'mwxk62',
   name: 'KKAV',
-  version: '1.1.0',
+  version: '1.1.1',
   protocol: 1,
-  description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名会变，插件自动解析）：点播源。2026-11-23 站点已迁移到新版 H5 平台（uni-app + /api 接口，响应为 ENC3 XOR 封包），本版按新接口重写：分类 /movie/tags、列表与搜索 /movie/list、首页 /movie/home_sections、详情 /movie/{id}。播放仍走原来的 m3u8 节点（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
+  description: 'KKAV（入口 62mwxk.com 是跳板页，真实域名会变，插件自动解析）：点播源。2026-11-23 站点已迁移到新版 H5 平台（uni-app + /api 接口，响应为 ENC3 XOR 封包），本版按新接口重写：分类 /movie/tags、列表与搜索 /movie/list、首页 /movie/home_sections、详情 /movie/{id}。封面与站点前端一致：不用 smallpic 直链（该域名图床不可达），而是取 /config/ini 的 tupath 拼 cover_64_2/<路径>.txt，内容为 data URI 文本，由插件 transformResource 解包。播放仍走原来的 m3u8 节点（AES-128 加密分片，由播放器按 m3u8 自行解密）。',
   author: 'community',
   kind: 'source',
   mature: true,
@@ -25,6 +25,8 @@ const M3U8_LINES = [
 ];
 // 新站接口 ENC3 封包的默认口令（站点前端 bundle 的默认值，运行时以此解包）
 const ENC_PASS = 'Mumu2026#';
+// 封面基址兜底（运行时从 /config/ini 的 system.tupath 读，2026-11-23 实测值）
+const FALLBACK_TUPATH = 'https://sq.2277ww.com';
 const PAGE_SIZE = 20;
 // 分类兜底（与旧版一致；新接口 /movie/tags 正常时不用）
 const FALLBACK_GROUPS = [
@@ -168,27 +170,62 @@ export default function (hg) {
     fail('UPSTREAM_ERROR', '无法解析 KKAV 当前可用域名（入口 ' + ENTRY + ' 的跳转目标都打不开）');
   }
 
+  // 站点配置（封面基址 tupath）；缓存 6 小时，失败用兜底
+  let cfgMem = null;
+  async function configIni(ctx) {
+    if (cfgMem) return cfgMem;
+    const cached = await hg.storage.get('cfg:v2');
+    if (cached && cached.tupath) { cfgMem = cached; return cfgMem; }
+    const cfg = { tupath: FALLBACK_TUPATH };
+    try {
+      const res = await api('/config/ini', ctx, { allowFail: true, timeoutMs: 12000 });
+      const tu = res && res.data && res.data.system && res.data.system.tupath;
+      if (tu && /^https?:\/\//.test(String(tu))) cfg.tupath = String(tu);
+    } catch (_) {}
+    cfgMem = cfg;
+    try { await hg.storage.set('cfg:v2', cfg, { ttlSec: 6 * 3600 }); } catch (_) {}
+    return cfg;
+  }
+
+  // 封面：与站点前端一致——smallpic 的路径 /cover/<...> 换成 cover_64_2/<...>.txt，拼在 tupath 后，
+  // 内容是 data URI 文本，靠 transformResource('datauri') 解包。smallpic 直链域名不可达，不能直接当封面。
+  function coverOf(m, tupath) {
+    const raw = String((m && m.smallpic) || '').trim();
+    if (!raw) return undefined;
+    let p = raw.replace(/^https?:\/\/[^/]+/i, '').split('?')[0].split('#')[0];
+    if (!p) return undefined;
+    p = p.replace(/\/cover\//i, '/cover_64_2/');
+    const segs = p.split('/').filter(Boolean);
+    if (segs.length && segs[0].toLowerCase() === 'cover') segs[0] = 'cover_64_2';
+    if (!segs.length) return undefined;
+    let path = segs.join('/');
+    path = /\.[a-z0-9]+$/i.test(path) ? path.replace(/\.[a-z0-9]+$/i, '.txt') : path + '.txt';
+    const base = String(tupath || FALLBACK_TUPATH).replace(/\/+$/, '');
+    return { url: base + '/' + path, transform: { type: 'plugin', name: 'datauri' } };
+  }
+
   // ---------- 数据映射 ----------
   function parseDate(s) {
     const m = String(s || '').match(/(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})/);
     if (!m) return null;
     return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])) - 8 * 3600000;
   }
-  function card(m) {
+  function card(m, tupath) {
     if (!m || m.movieid == null) return null;
     const item = { id: String(m.movieid), title: String(m.Topic || '').trim(), type: 'movie' };
     if (!item.title) return null;
-    if (m.smallpic && /^https?:\/\//.test(m.smallpic)) item.cover = m.smallpic;
+    const cov = coverOf(m, tupath);
+    if (cov) item.cover = cov;
     const dur = parseInt(m.timesize, 10);
     if (Number.isFinite(dur) && dur > 0) item.durationSec = dur;
     const t = parseDate(m.time1 || m.UpdateTime || m.release_date);
     if (t) { item.publishedAt = t; item.year = new Date(t + 8 * 3600000).getUTCFullYear(); }
     return item;
   }
-  function cards(list) {
+  function cards(list, tupath) {
     const out = [], seen = {};
     (list || []).forEach(function (m) {
-      const it = card(m);
+      const it = card(m, tupath);
       if (it && !seen[it.id]) { seen[it.id] = 1; out.push(it); }
     });
     return out;
@@ -227,7 +264,8 @@ export default function (hg) {
     let path = '/movie/list?page=' + page + '&pageSize=' + PAGE_SIZE;
     if (extra) path += extra;
     const res = await api(path, ctx, { timeoutMs: 20000 });
-    const items = cards(res.data);
+    const cfg = await configIni(ctx);
+    const items = cards(res.data, cfg.tupath);
     const total = Number(res.total) || 0;
     return { items: items, next: total > page * PAGE_SIZE && items.length ? String(page + 1) : null };
   }
@@ -259,9 +297,10 @@ export default function (hg) {
     home: {
       async getSections(params, ctx) {
         const res = await api('/movie/home_sections?pageSize=12', ctx, { timeoutMs: 20000 });
+        const cfg = await configIni(ctx);
         const sections = [];
         (res.data || []).forEach(function (s, i) {
-          const items = cards(s.movies);
+          const items = cards(s.movies, cfg.tupath);
           if (items.length) sections.push({ id: 'sec' + (s.tagid != null ? s.tagid : i), title: String(s.tagname || '最新'), layout: 'grid', imageAspect: 'landscape', items: items });
         });
         if (!sections.length) fail('UPSTREAM_CHANGED', '首页结构已变化');
@@ -291,7 +330,8 @@ export default function (hg) {
     media: {
       async getDetail(params, ctx) {
         const d = await detailData(params && params.id, ctx);
-        const item = card(d) || { id: String(d.movieid), title: String(d.movieid), type: 'movie' };
+        const cfg = await configIni(ctx);
+        const item = card(d, cfg.tupath) || { id: String(d.movieid), title: String(d.movieid), type: 'movie' };
         const detail = {
           id: item.id,
           title: item.title,
@@ -306,7 +346,7 @@ export default function (hg) {
         try {
           if (d.tagid) {
             const rel = await api('/movie/related?tagid=' + encodeURIComponent(d.tagid) + '&movieid=' + encodeURIComponent(item.id), ctx, { allowFail: true, timeoutMs: 12000 });
-            const related = cards(rel && rel.data).filter(function (x) { return x.id !== detail.id; });
+            const related = cards(rel && rel.data, cfg.tupath).filter(function (x) { return x.id !== detail.id; });
             if (related.length) detail.related = related;
           }
         } catch (_) {}
@@ -353,6 +393,16 @@ export default function (hg) {
         const m = u.match(/\/movie\/(\d+)/) || u.match(/[?&](?:movieid|id)=(\d+)/);
         return m ? { mediaId: m[1] } : null;
       },
+    },
+
+    // 封面 .txt 内容是 "data:image\jpg;base64,\9j\4AAQ…"（斜杠被写成反斜杠，含换行），与旧版相同
+    transformResource(params) {
+      if (params.name !== 'datauri') return { data: params.data };
+      const text = hg.codec.utf8Decode(params.data).replace(/\\/g, '/').trim();
+      const m = text.match(/^data:([^;,]+);base64,([\s\S]*)$/);
+      if (!m) return { data: params.data };
+      const b64 = m[2].replace(/[^A-Za-z0-9+/=]/g, '');
+      return { data: hg.codec.base64Decode(b64), contentType: m[1].replace('jpg', 'jpeg') };
     },
   };
 }
