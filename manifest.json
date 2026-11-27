@@ -1,27 +1,13 @@
 {
   "name": "HGhub 修复版片源",
-  "description": "HGhub 片源合集：CoderL98 修复 + 新增 + P91 移植，2026-11 体检通过（28 个源）。相对路径以本列表 URL 为基准。",
+  "description": "HGhub 片源合集：CoderL98 修复 + 新增 + P91 移植，2026-11 体检通过（23 个源）。相对路径以本列表 URL 为基准。",
   "plugins": [
-    {
-      "id": "4kav",
-      "name": "4k-av",
-      "version": "1.0.3",
-      "url": "plugins/4kav.js",
-      "description": "4kmp 影视源：首页、分类、搜索、详情与直链播放。"
-    },
     {
       "id": "91porn",
       "name": "91porn",
       "version": "1.0.1",
       "description": "91porn（含镜像 sp2026.com，可在线路中切换）：分类、搜索、详情与 MP4 播放。",
       "url": "plugins/91porn.js"
-    },
-    {
-      "id": "apple",
-      "name": "小苹果",
-      "version": "1.0.1",
-      "url": "plugins/apple.js",
-      "description": "小苹果影视 App 接口：分类、搜索、详情与 HLS 播放。上游为 HTTP。"
     },
     {
       "id": "avjb",
@@ -73,13 +59,6 @@
       "url": "plugins/haose.js"
     },
     {
-      "id": "hdmoli",
-      "name": "hdmoli",
-      "version": "2.0.0",
-      "url": "plugins/hdmoli.js",
-      "description": "HDmoli：电影/剧集/动画分类与搜索。站点已改为网盘资源站，播放会跳转夸克/百度网盘。"
-    },
-    {
       "id": "hkdoll",
       "name": "玩偶姐姐",
       "version": "1.0.5",
@@ -99,13 +78,6 @@
       "version": "1.0.0",
       "description": "18J.TV（18j.tv）：分类（运行时从 /label/sort/ 解析，内置兜底）、搜索、短剧多集、HLS 播放。",
       "url": "plugins/j18.js"
-    },
-    {
-      "id": "jpyy",
-      "name": "金牌影视",
-      "version": "1.0.1",
-      "url": "plugins/jpyy.js",
-      "description": "金牌影视匿名接口：分类、搜索、详情与播放。签名用 MD5+SHA1。"
     },
     {
       "id": "madou",
@@ -169,13 +141,6 @@
       "version": "1.0.1",
       "description": "糖心Vlog（tangxinvlog.pro）：全部作品 / 博主 / 题材标签分类，站内搜索（基于站点 search-index.json），HLS(AES-128) 播放。",
       "url": "plugins/tangxin.js"
-    },
-    {
-      "id": "wwgz",
-      "name": "农民影视",
-      "version": "1.0.3",
-      "url": "plugins/wwgz.js",
-      "description": "农民影视：分类、搜索、多线路详情与 nmvod 播放解析。"
     },
     {
       "id": "xhamster",
