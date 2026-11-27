@@ -8,6 +8,8 @@
 
 | 源 | 版本 | 修复内容 |
 | --- | --- | --- |
+| KKAV | 1.1.0 | **站点整体迁移到新版 H5 平台，旧片库页面（/home.htm、/htms/list、setm3u8）全部下线，旧版插件的域名校验（video-listing）必然失败**。入口跳板 62mwxk.com 仍有效（当前指向 www.57hqky.com），改为校验新站 /api/movie/tags；数据层按新接口重写（ENC3 XOR 封包解码）：分类 /movie/tags、列表与搜索 /movie/list、首页 /movie/home_sections、详情 /movie/{id}；封面改为直链 JPG。播放节点不变（h1.qhkjapp.com / h3.xinghun1.com，AES-128），详情的相对 /data/ 路径拼节点域名。2026-11-23 实测分类/列表/首页/搜索/详情/播放清单全通 |
+| Rou Video | 1.0.0 | 插件本身未坏：2026-11-23 实测 transformResource 对当前清单与分片解包正常（清单解出 #EXTM3U、分片解出 TS）。体检里的「视频流：返回的不是清单（image/png）」是宿主诊断探针误报——探针绕过媒体代理直拉原始地址、没走插件变换，看到的必然是 PNG 包装。修复在宿主 hghub-ios 的 sourceCheck（带 plugin 变换的流不再按原始内容判失败），插件无需改动 |
 | 4k-av | 1.0.3 | 4kmp.com 改为 4k-av.com，补 Accept-Language 请求头（不带时 WAF 返回 403）。搜索参数由 `q` 改为 `u`，并支持倒序分页 |
 | Hanime1 | 1.0.4 | 主域被 Cloudflare 拦截，改用镜像 hanimeone.me。适配新版卡片 `.video-item-container`，中文分类链接转码。**播放改为解析 `<video><source>`**，支持多清晰度。不足一页时不再声明有下一页 |
 | 玩偶姐姐 | 1.0.3 | **旧 CDN 节点（t26/t27）已下线，改用 t33**，原地址保留作备用线路。中文/空格路径转码，翻页改为按分页链接判断，过滤站外广告分类 |
