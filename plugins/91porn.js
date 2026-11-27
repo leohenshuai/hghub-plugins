@@ -1,7 +1,7 @@
 export const meta = {
   id: '91porn',
   name: '91porn',
-  version: '1.0.1',
+  version: '1.0.3',
   protocol: 1,
   description: '91porn（含镜像 sp2026.com，可在线路中切换）：分类、搜索、详情与 MP4 播放。',
   author: 'community',
@@ -36,7 +36,11 @@ const CATEGORIES = [
 ];
 
 export default function (hg) {
+  // 主站若返回 403，自动切到已配置的 sp2026 镜像；报告 2026-11-27 实测主站 403、镜像 200。
+  // endpoint.current 仍保留用户所选线路，自动切换只在本次插件实例内生效。
+  let autoOrigin = '';
   function origin() {
+    if (autoOrigin) return autoOrigin;
     const cur = hg.endpoint && hg.endpoint.current;
     if (cur && typeof cur.url === 'string' && cur.url) return cur.url.replace(/\/$/, '');
     return SITE;
@@ -65,8 +69,8 @@ export default function (hg) {
       url,
       headers: h,
       responseType: 'text',
-      timeoutMs: 15000,
-      retry: 1,
+      timeoutMs: extra && extra.timeoutMs ? extra.timeoutMs : 15000,
+      retry: extra && extra.retry !== undefined ? extra.retry : 1,
       credentials: 'omit',
       maxBytes: 8 * 1024 * 1024,
       signal: ctx && ctx.signal,
@@ -76,9 +80,44 @@ export default function (hg) {
   }
 
   async function fetchHtml(url, ctx) {
-    const res = await request(url, ctx);
-    if (!res.ok) fail('UPSTREAM_ERROR', '页面暂时不可用（HTTP ' + res.status + '）');
-    return res.data;
+    // 只对明确的站点故障换站；取消、认证、内容不存在不能借换线绕过去。
+    let parsed;
+    try { parsed = new URL(url); } catch (_) { return (await request(url, ctx)).data; }
+    const known = [SITE, MIRROR];
+    const source = parsed.origin;
+    if (known.indexOf(source) < 0) {
+      const res = await request(url, ctx);
+      if (!res.ok) fail('UPSTREAM_ERROR', '页面暂时不可用（HTTP ' + res.status + '）');
+      return res.data;
+    }
+    const candidates = [source].concat(known.filter(function (o) { return o !== source; }));
+    let lastError;
+    for (let i = 0; i < candidates.length; i++) {
+      if (ctx && ctx.signal && ctx.signal.aborted) fail('CANCELLED', '调用已取消');
+      const base = candidates[i];
+      try {
+        // 每站最多 6 秒、不在坏站原地重试，给镜像及后续解析留出调用预算。
+        const res = await request(base + parsed.pathname + parsed.search, ctx, { referer: base + '/', timeoutMs: 6000, retry: 0 });
+        if (res.ok) {
+          // 不把「200 的人机验证/空页」记成健康线路。
+          const body = String(res.data || '');
+          if (!body.trim() || /<title>\s*(?:Just a moment|Access denied)|cf-chl-|id=["']challenge-form/i.test(body)) {
+            fail('UPSTREAM_ERROR', '站点返回了验证页或空页面');
+          }
+          autoOrigin = base;
+          if (i && hg.log && hg.log.info) hg.log.info('主线路不可用，已自动切换到 ' + base);
+          return res.data;
+        }
+        const retryable = [403, 408, 429].indexOf(res.status) >= 0 || res.status >= 500;
+        if (!retryable) fail(res.status === 404 ? 'NOT_FOUND' : res.status === 401 ? 'AUTH_REQUIRED' : 'UPSTREAM_CHANGED', '页面请求失败（HTTP ' + res.status + '），不自动换站');
+        fail('UPSTREAM_ERROR', '页面暂时不可用（HTTP ' + res.status + '）');
+      } catch (e) {
+        if (ctx && ctx.signal && ctx.signal.aborted) fail('CANCELLED', '调用已取消');
+        if (!e || ['NETWORK', 'TIMEOUT', 'UPSTREAM_ERROR'].indexOf(e.code) < 0) throw e;
+        lastError = e;
+      }
+    }
+    throw lastError;
   }
 
   function encodeUrl(u) { try { return encodeURI(decodeURI(u)); } catch (e) { return encodeURI(u); } }

@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=process.env.HGHUB_PLUGIN_DIR || fileURLToPath(new URL('../../plugins/',import.meta.url));
+const sources=Object.fromEntries(['mrds','bl911'].map(id=>[id,fs.readFileSync(path.join(root,id+'.js'),'utf8')]));
+const pre='const SOURCES='+JSON.stringify(sources)+';\n';
+const suite=fs.readFileSync(new URL('./endpoint-suite.js',import.meta.url),'utf8');
+fs.writeFileSync(new URL('./endpoints.cjs',import.meta.url),pre+suite);
+const shim="import * as os from 'os';\nglobalThis.setTimeout=os.setTimeout;\nglobalThis.URL=class {constructor(u){this.origin=(u.match(/^https?:\\/\\/[^/]+/)||[])[0];this.href=u;}};\n";
+fs.writeFileSync(new URL('./endpoints-qjs.js',import.meta.url),shim+pre+suite);
